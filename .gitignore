@@ -1,0 +1,8 @@
+
+# executables
+*.out
+*.exe
+
+# "Hidden folders"
+[Bb]uild/*
+[Hh]ide/*
