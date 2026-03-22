@@ -5,79 +5,14 @@
 #include<stdint.h>
 #include<stdlib.h>
 
-
-// ======== DEFINES
-#define TCL_MIN_CAPACITY 128
-
-#define TCL_REALLOC_LIST(list,baseType,elementType)                  \
-do{                                                                  \
- if((*list)->length >= (*list)->capacity){                           \
-  (*list)->capacity *= 2;                                            \
-  *list = realloc(sizeof(baseType) +                                 \
-    sizeof(elementType) * (*list)->capacity;                         \
- }                                                                   \
-}while(false)
-
-// ======== structs
-
-union TCL_Combined{
-	int32_t nInt;
-	float nFloat;
-};
-
-enum TCL_String_Tags{
-	TCL_ST_None,
-	TCL_ST_Variable,
-	TCL_ST_LookUp,
-	TCL_ST_Object,
-};
-
-// should be immutable when refs > 1?
-struct TCL_String{
-	int32_t refs;
-	int32_t tags;
-	int32_t length;
-	int32_t capacity;
-	char data[];
-};
-struct TCL_Slice{
-	int32_t refs;
-	int32_t tags;
-	int32_t offset;
-	int32_t length;
-	TCL_String *string;
-}
-struct _TCL_KV{
-	size_t kHash;
-	TCL_String *key;
-	TCL_String *value;
-};
-struct TCL_Scope{
-	int32_t length;
-	int32_t capacity;
-	struct _TCL_KV kv[];
-};
-struct TCL_StringArena{
-	int32_t length;
-	int32_t capacity;
-	struct TCL_String (*string)[];
-};
-struct TCL_SliceArena{
-	int32_t length;
-	int32_t capacity;
-	struct TCL_String (*string)[];
-};
-
-// ========== typedefs
-typedef struct TCL_String TCL_String;
-typedef struct TCL_Slice TCL_Slice;
-typedef struct TCL_Scope TCL_Scope;
-typedef struct TCL_StringArena TCL_StringArena;
-typedef struct TCL_SliceArena TCL_SliceArena;
+#include"tcl_struct.h"
 
 // ========== declerations
 
 size_t tcl_hash_string(TCL_String *string);
+size_t tcl_hash_array(char *arr,int32_t length);
+char tcl_string_eq(TCL_String *cmp,TCL_String *str);
+void tcl_string_cp(TCL_String *into,TCL_String *from);
 
 TCL_Slice *tcl_get_slice_of(TCL_SliceArena **sliceArena,
 		TCL_String *string,int32_t start,int32_t end);
@@ -88,6 +23,7 @@ void tcl_set_into_scope(TCL_Scope **stringScope,
 void tcl_insert_into_scope(TCL_Scope **stringScope,
 		TCL_String *key,TCL_String *value);
 TCL_String *tcl_get_from_scope(TCL_Scope **stringScope,TCL_String *key);
+TCL_String *tcl_get_from_scope_slice(TCL_Scope **stringScope,TCL_Slice *key);
 void tcl_drop_scope(TCL_Scope **stringScope);
 TCL_Scope *tcl_create_scope(void);
 
@@ -98,21 +34,58 @@ void TCL_garbage_collect_string_arena(TCL_StringArena **stringArena);
 
 // ========== functions
 size_t tcl_hash_string(TCL_String *string){
+	return tcl_hash_array(&(string->data),string->length);
+}
+size_t tcl_hash_array(char *arr,int32_t length){
 	size_t hash = 0;
-	int32_t length = string->length;
+	/*
 	switch(length & 3){
 		case 3:hash += string->data[length - 3] * 555;
 		case 2:hash += string->data[length - 2] * 177;
 		case 1:hash += string->data[length - 1];
 		default:break;
 	}
-	int32_t *changed = (void*)(string->data);
+	int32_t *changed = (void*)(arr);
 	for(int32_t idx = 0;idx < (length >> 2);idx++){
 		hash += (hash << 17) ^ (hash << 13);
 		hash += changed[idx];
 		hash ^= hash >> 11;
+	} */
+	for(int32_t idx = 0;idx < length;idx++){
+		hash += (hash << (sizeof(size_t) * 4 + 3)) ^
+			(hash << (sizeof(size_t) * 2 + 1));
+		hash += arr[idx];
+		hash ^= (hash >> 11) + (hash >> (sizeof(size_t) * 3 + 2));
 	}
 	return hash;
+}
+char tcl_string_eq(TCL_String *cmp,TCL_String *str){
+	if(str->length != cmp->length)
+		return 0;
+	// this is very unlikely
+	if(str == cmp)
+		return 1;
+	for(int over = 0;over < str->length;over++){
+		if(cmp->data[over] != str->data[over]){
+			return 0;
+		}
+	}
+	return 1;
+}
+void tcl_string_cp(TCL_String **into,TCL_String *from){
+	char sizeChange = 0;
+	while((*into)->capacity <= (*into)->length + from->length){
+		(*into)->capacity *= 2;
+		sizeChange = 1;
+	}
+	if(sizeChange){
+		(*into) = realloc(sizeof(TCL_String) +
+				sizeof(char) * (*into)->capacity);
+	}
+	for(int idx = 0;idx < from->length;idx++){
+		(*into)->data[(*into)->length] = from->data[idx];
+		(*into)->length++;
+	}
 }
 
 TCL_Slice *tcl_get_slice_of(TCL_SliceArena **sliceArena,
@@ -144,26 +117,9 @@ void tcl_set_into_scope(TCL_Scope **stringScope,
 	int idx;
 	size_t hash = tcl_hash_string(key);
 	for(idx = 0;idx < scope->length;idx++){
-		if(scope->kv[idx].kHash != hash)continue;
-		if(scope->kv[idx].key->length != key->length)continue;
-		// this is very unlikely
-		if(scope->kv[idx].key == key){
-			oldValue = scope->kv[idx].value;
-			break;
-		}
-
-		char *fetch = scope->kv[idx].key->data;
-		char matches = 1;
-		for(int over = 0;over < key->length;over++){
-			if(fetch[over] != key->data[over]){
-				matches = 0;
-				break;
-			}
-		}
-		if(matches){
-			oldValue = scope->kv[idx].value;
-			break;
-		}
+		if(!tcl_string_eq(scope->kv[idx].key,key))
+			continue;
+		oldValue = scope->kv[idx].value;
 	}
 	// swap values
 	if(oldValue != NULL){
@@ -197,21 +153,21 @@ TCL_String *tcl_get_from_scope(TCL_Scope **stringScope,TCL_String *key){
 	TCL_Scope *scope = *stringScope;
 	size_t hash = tcl_hash_string(key);
 	for(int idx = 0;idx < scope->length;idx++){
-		if(scope->kv[idx].kHash != hash)continue;
-		if(scope->kv[idx].key->length != key->length)continue;
-		// this is very unlikely
-		if(scope->kv[idx].key == key)return scope->kv[idx].value;
-
-		char *fetch = scope->kv[idx].key->data;
-		char matches = 1;
-		for(int over = 0;over < key->length;over++){
-			if(fetch[over] != key->data[over]){
-				matches = 0;
-				break;
-			}
-		}
-		if(matches)
-			return scope->kv[idx].value;
+		if(hash != scope->kv[idx].kHash)continue;
+		if(!tcl_string_eq(scope->kv[idx].value,key))
+			continue;
+		return scope->kv[idx].value;
+	}
+	return NULL;
+}
+TCL_String *tcl_get_from_scope_slice(TCL_Scope **stringScope,TCL_Slice *key){
+	TCL_Scope *scope = *stringScope;
+	size_t hash = tcl_hash_array(&(key->string->data[key->offset]),key->length);
+	for(int idx = 0;idx < scope->length;idx++){
+		if(hash != scope->kv[idx].kHash)continue;
+		if(!tcl_string_eq(scope->kv[idx].value,key))
+			continue;
+		return scope->kv[idx].value;
 	}
 	return NULL;
 }

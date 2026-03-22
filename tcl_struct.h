@@ -8,6 +8,7 @@
 // ======== DEFINES
 #define TCL_MIN_CAPACITY 128
 #define TCLS_STRING_DEPTH 64
+#define TCLR_STACK_SIZE 64
 
 // ======== structs
 union TCL_Combined{
@@ -35,12 +36,12 @@ struct TCL_Slice{
 	int32_t tags;
 	int32_t offset;
 	int32_t length;
-	TCL_String *string;
+	struct TCL_String *string;
 }
 struct _TCL_KV{
 	size_t kHash;
-	TCL_String *key;
-	TCL_String *value;
+	struct TCL_String *key;
+	struct TCL_String *value;
 };
 struct TCL_Scope{
 	int32_t length;
@@ -65,11 +66,11 @@ enum TCLS_CMD_FLAGS {
 struct _TCLS_Cmd{
 	int32_t length;
 	int32_t capacity;
-	TCLS_Cmd_Flags flags;
+	enum TCLS_Cmd_Flags flags;
 	int32_t stackDepth;
-	TCL_String *command;
+	struct TCL_String *command;
 	void *moreData;
-	TCL_String (*arguments)[];
+	struct TCL_String (*arguments)[];
 };
 struct TCLS_Commands{
 	int32_t refs;
@@ -79,10 +80,17 @@ struct TCLS_Commands{
 	struct _TCLS_Cmd (*commands)[];
 };
 //
+enum TCLF_FN_FLAGS{
+	TCLF_FN_CONVERT, 
+	TCLF_FN_NATIVE, 
+	TCLF_FN_RAW, 
+};
 struct _TCLF_KV{
 	size_t kHash;
-	TCL_String *key;
-	TCL_String *value;
+	enum TCLF_FN_FLAGS flags;
+	struct TCLS_Commands *cmds;
+	void (*fn)();
+	struct TCL_String *value;
 };
 struct TCLF_Scope{
 	int32_t length;
@@ -99,9 +107,9 @@ struct TCLR_Context{
 	//
 	int32_t instruction;
 	int32_t parseStackIdx;
-	TCLR_FLAGS flags;
-	TCLS_Commands *program;
-	TCL_String (*parseStack)[TCLR_STACK_SIZE];
+	enum TCLR_FLAGS flags;
+	struct TCLS_Commands *program;
+	struct TCL_String (*parseStack)[TCLR_STACK_SIZE];
 	struct TCL_Scope *scope;
 	struct TCLR_Context *parent;
 	struct TCLR_Context *vparent;

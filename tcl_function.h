@@ -2,19 +2,15 @@
 #ifndef TCL_FUNCTION_H_
 #define TCL_FUNCTION_H_
 
+#include"tcl_struct.h"
 #include"tcl_type.h"
 
-struct _TCLF_KV{
-	size_t kHash;
-	TCL_String *key;
-	TCL_String *value;
-};
-struct TCLF_Scope{
-	int32_t length;
-	int32_t capacity;
-	struct _TCLF_KV kv[];
-};
-
-typedef struct TCLF_Scope TCLF_Scope;
+struct _TCLF_KV *tclf_get_function(TCLF_Scope *scope,TCL_String *str){
+	size_t h1 = tcl_hash_string(str);
+	for(idx = 0;idx < scope->length;idx++){
+		if(!tcl_string_eq(scope->kv[idx].key,str))
+			return scope->kv[idx].value;
+	}
+}
 
 #endif

@@ -3,34 +3,9 @@
 
 #include<stdint.h>
 #include<stdlib.h>
+#include"tcl_struct.h"
 #include"tcl_type.h"
 
-#define TCLS_STRING_DEPTH 64
-
-
-enum TCLS_CMD_FLAGS {
-	TCLS_CMD_NORMAL = 0,
-	TCLS_CMD_PUSH = 1
-};
-typedef enum TCLS_CMD_FLAGS TCLS_CMD_FLAGS;
-//
-struct _TCLS_Cmd{
-	int32_t length;
-	int32_t capacity;
-	TCLS_Cmd_Flags flags;
-	int32_t stackDepth;
-	TCL_String *command;
-	void *moreData;
-	TCL_String (*arguments)[];
-};
-struct TCLS_Commands{
-	int32_t refs;
-	int32_t tags;
-	int32_t length;
-	int32_t capacity;
-	struct _TCLS_Cmd (*commands)[];
-};
-typedef struct TCLS_Commands TCLS_Commands;
 
 TCL_String *tcls_string_from_array(uint8_t str[],int32_t length,int32_t *index);
 void tcls_insert_command(TCL_Commands *cmd,TCL_String *str,
@@ -107,14 +82,16 @@ TCL_String _tcls_make_string_from_bound(uint8_t str[],int32_t lower,int32_t uppe
 	char state = 0;
 	for(int idx = lower;idx < upper;idx++){
 		if(state == 0){
+			strOut->data[strOut->length++] = str[idx];
 			if(str[idx] == '\\'){
 				state = 1;
 				continue;
 			}
-			strOut->data[strOut->length++] = str[idx];
 		}
 		else{
 			state = 0;
+			//strOut->data[strOut->length++] = str[idx];
+			//   /*
 			if(str[idx] == 'a')
 				strOut->data[strOut->length++] = '\a';
 			else if(str[idx] == 'b')
@@ -144,11 +121,11 @@ TCL_String _tcls_make_string_from_bound(uint8_t str[],int32_t lower,int32_t uppe
 				// TODO
 			}
 			else if(str[idx] == '$'){
-				strOut->data[strOut->length++] = '\\';
 				strOut->data[strOut->length++] = '$';
 			}
 			else
 				strOut->data[strOut->length++] = str[idx];
+			////   */
 		}
 	}
 	return strOut;
