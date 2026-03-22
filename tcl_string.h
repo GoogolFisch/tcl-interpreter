@@ -7,13 +7,21 @@
 
 #define TCLS_STRING_DEPTH 64
 
+
+enum TCLS_CMD_FLAGS {
+	TCLS_CMD_NORMAL = 0,
+	TCLS_CMD_PUSH = 1
+};
+typedef enum TCLS_CMD_FLAGS TCLS_CMD_FLAGS;
 //
 struct _TCLS_Cmd{
 	int32_t length;
 	int32_t capacity;
+	TCLS_Cmd_Flags flags;
+	int32_t stackDepth;
 	TCL_String *command;
 	void *moreData;
-	TCL_String *arguments[];
+	TCL_String (*arguments)[];
 };
 struct TCLS_Commands{
 	int32_t refs;
@@ -25,15 +33,18 @@ struct TCLS_Commands{
 typedef struct TCLS_Commands TCLS_Commands;
 
 TCL_String *tcls_string_from_array(uint8_t str[],int32_t length,int32_t *index);
+void tcls_insert_command(TCL_Commands *cmd,TCL_String *str,
+		int32_t *strIdx,TCLS_CMD_FLAGS flags);
 
 // until where
-int32_t _tcls_string_get_length_array(uint8_t str[],int32_t length,int32_t index){
+int32_t _tcls_string_get_length_array(uint8_t str[],int32_t length,int32_t index,
+		int32_t preFlags){
 	int32_t stringOffsets[TCLS_STRING_DEPTH];
 	int32_t stackIdx = 0;
 	int32_t beginning = index;
 	int32_t ending = index;
 	char state = 0;
-	if(str[index] != '"' && str[index] != '{'){
+	if(str[index] != '"' && str[index] != '{' && str[index] != '['){
 		// literal string (top layer)
 		while(ending < length){
 			if(state == 0){
@@ -58,6 +69,9 @@ int32_t _tcls_string_get_length_array(uint8_t str[],int32_t length,int32_t index
 			if(str[ending] == '"' && *(stringOffsets[stackIdx]) == '"'){
 				stackIdx--;
 			}
+			if(str[ending] == ']' && *(stringOffsets[stackIdx]) == '['){
+				stackIdx--;
+			}
 			if(str[ending] == '}' && *(stringOffsets[stackIdx]) == '{'){
 				stackIdx--;
 			}
@@ -65,11 +79,16 @@ int32_t _tcls_string_get_length_array(uint8_t str[],int32_t length,int32_t index
 				stringOffsets[stackIdx] = *index;
 				stackIdx++;
 			}
+			// also use preFlags
+			if(str[ending] == '[' && *(stringOffsets[0]) == '"'){
+				stringOffsets[stackIdx] = *index;
+				stackIdx++;
+			}
 			if(str[ending] == '\\'){
 				state = 1;
 			}
 		}
-		if(state == 1)state = 0;
+		else if(state == 1)state = 0;
 		if(stackIdx == 0)break;
 		ending++;
 	}
@@ -124,6 +143,10 @@ TCL_String _tcls_make_string_from_bound(uint8_t str[],int32_t lower,int32_t uppe
 			else if(str[idx] >= '0' && str[idx] <= '7'){
 				// TODO
 			}
+			else if(str[idx] == '$'){
+				strOut->data[strOut->length++] = '\\';
+				strOut->data[strOut->length++] = '$';
+			}
 			else
 				strOut->data[strOut->length++] = str[idx];
 		}
@@ -176,11 +199,160 @@ void _tcls_sub_parse_arguments(TCL_String *str,TCLS_Commands *tcmd,
 						sizeof(TCL_String *) * cmd->capacity);
 		}
 		//
-		TCL_String *cc = tcls_string_from_array(
-				str->data,str->length,index);
+		TCL_String *cc = malloc(sizeof(TCL_String) +
+				sizeof(char) * TCL_MIN_CAPACITY);
+		cc->capacity = TCL_MIN_CAPACITY;
+		cc->tags = TCL_ST_None;
+		cc->refs = 1;
+		cc->length = 0;
+		//TCL_String *cc = tcls_string_from_array(
+		//		str->data,str->length,index);
+		int strIdx = 0;
+		while(strIdx < str->length){
+			//int32_t _tcls_string_get_length_array(
+			//	uint8_t str[],int32_t length,int32_t index,
+
+			if(strIdx->data[strIdx] == '{'){
+			}
+			if(strIdx->data[strIdx] == '['){
+				// this is the best part!
+
+			}
+
+
+
+			strIdx++;
+		}
 		cmd->arguments[cmd->length] = cc;
 		cmd->length++;
 	}
+}
+
+void _tcls_sub_expr_cmd(TCL_Commands **cmd,
+		TCL_String *outStr,int32_t *strIdx){
+	char extraState;
+	int32_t beg;
+	// TODO add single [ ] multi run
+	while(beg){
+		beg = 0;
+		outStr->length--;
+		tcls_insert_command(cmd,outStr,&beg,TCLS_CMD_PUSH);
+		outStr->length++;
+		if(outStr->data[beg] == ';'){
+			beg = 1;
+			cmd->commands[cmd->length - 1]->flags = TCLS_CMD_NORMAL;
+		}
+	}
+}
+
+TCL_String *_tcls_cmd_get_string(TCL_Commands **cmd,TCL_String *str,
+		int32_t *strIdx){
+	int32_t start = *strIdx;
+	int32_t ending = _tcls_string_get_length_array(&(str->data),
+			str->length - start,start);
+	int32_t idx = start;
+	TCL_String *outStr;
+
+	int32_t idx = start;
+	//(*strIdx) = *idx;
+
+	if(str->data[*start] == '{'){
+		outStr = tcls_string_from_array(&(str->data),ending - start,&idx);
+		(*strIdx) = idx;
+		return outStr;
+	}
+	//
+	outStr = malloc(sizeof(TCL_String) + sizeof(char) * (ending - start));
+	int32_t stringOffsets[TCLS_STRING_DEPTH];
+	int32_t stackIdx = 0;
+	char state = 0;
+	for(idx = start;idx < ending;idx++){
+		if(state & 1 == 0){
+			if(str[ending] == '"' && *(stringOffsets[stackIdx]) == '"'){
+				stackIdx--;
+			}
+			if(str[ending] == ']' && *(stringOffsets[stackIdx]) == '['){
+				stackIdx--;
+				if(stackIdx == 0){
+					state &= ~2;
+					//
+					beg = strinOffsets[stackIdx + 1] + 1;
+					extraState = 1;
+					_tcls_sub_expr_cmd(cmd,outStr,strIdx);
+				}
+			}
+			if(str[ending] == '}' && *(stringOffsets[stackIdx]) == '{'){
+				stackIdx--;
+			}
+			if(str[ending] == '{'){
+				stringOffsets[stackIdx] = *index;
+				stackIdx++;
+			}
+			// also use preFlags
+			if(str[ending] == '['){
+				stringOffsets[stackIdx] = *index;
+				stackIdx++;
+			}
+			if(str[ending] == '\\'){
+				state = 1;
+				continue;
+			}
+			// exclude everything in [ ]
+			if(state & 2 == 0){
+				outStr->data[outStr->length] = str[ending];
+				outStr->length++;
+				if(str[ending] == '[' && stackIdx == 1)
+					state |= 4;
+			}
+		}
+		else if(state & 1 == 1)state &= (~1);
+		if(stackIdx == 0)break;
+	}
+
+
+
+	return outStr;
+}
+
+void tcls_insert_command(TCL_Commands **cmd,TCL_String *str,
+		int32_t *strIdx,TCLS_CMD_FLAGS flags){
+	struct _TCLS_Cmd *icmd = malloc(sizeof(struct _TCLS_Cmd) +
+			sizeof(TCL_String) * 0);
+	icmd->length = 0;
+	icmd->capacity = 0;
+	icmd->flags = flags;
+	icmd->stackDepth = 0;
+	icmd->commands = NULL;
+	icmd->moreData = NULL;
+
+	icmd->commands = _tcls_cmd_get_string(cmd,str,strIdx);
+
+	while(1){
+		if(str->data[*strIdx] == '\n') break;
+		if(str->data[*strIdx] == '\r') break;
+		if(str->data[*strIdx] == ';') break;
+		// normal way
+		if(str->data[*strIdx] == ' ') (*strIdx)++;
+		else{} // TODO: sould error?
+		// regrow
+		if(icmd->capacity <= icmd->length){
+			icmd->capacity *= 2;
+			if(icmd->capacity == 0)icmd->capacity = TCL_MIN_CAPACITY;
+			icmd = realloc(sizeof(struct _TCLS_Cmd) +
+					sizeof(TCL_String) * icmd->capacity);
+		}
+		//
+		icmd->arguments[icmd->length] = _tcl_cmd_get_string(cmd,str,strIdx);
+		icmd->length++;
+	}
+
+	if((*cmd)->length >= (*cmd)->capacity){
+		(*cmd)->capacity *= 2;
+		(*cmd) = realloc(sizeof(TCLS_Commands) +
+			sizeof(struct _TCLS_Cmd*) * (*cmd)->capacity);
+	}
+	(*cmd)->commands[cmd->length] = icmd;
+	(*cmd)->length++;
 }
 
 TCLS_Commands *tcls_parse_commands(TCL_String *str){
