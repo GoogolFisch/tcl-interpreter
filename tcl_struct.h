@@ -29,7 +29,7 @@ struct TCL_String{
 	int32_t tags;
 	int32_t length;
 	int32_t capacity;
-	char data[];
+	uint8_t data[];
 };
 struct TCL_Slice{
 	int32_t refs;
@@ -37,7 +37,7 @@ struct TCL_Slice{
 	int32_t offset;
 	int32_t length;
 	struct TCL_String *string;
-}
+};
 struct _TCL_KV{
 	size_t kHash;
 	struct TCL_String *key;
@@ -51,12 +51,12 @@ struct TCL_Scope{
 struct TCL_StringArena{
 	int32_t length;
 	int32_t capacity;
-	struct TCL_String (*string)[];
+	struct TCL_String *(string[]);
 };
 struct TCL_SliceArena{
 	int32_t length;
 	int32_t capacity;
-	struct TCL_String (*string)[];
+	struct TCL_Slice *(string[]);
 };
 
 enum TCLS_CMD_FLAGS {
@@ -66,18 +66,18 @@ enum TCLS_CMD_FLAGS {
 struct _TCLS_Cmd{
 	int32_t length;
 	int32_t capacity;
-	enum TCLS_Cmd_Flags flags;
+	enum TCLS_CMD_FLAGS flags;
 	int32_t stackDepth;
 	struct TCL_String *command;
 	void *moreData;
-	struct TCL_String (*arguments)[];
+	struct TCL_String *(arguments[]);
 };
 struct TCLS_Commands{
 	int32_t refs;
 	int32_t tags;
 	int32_t length;
 	int32_t capacity;
-	struct _TCLS_Cmd (*commands)[];
+	struct _TCLS_Cmd *(commands[]);
 };
 //
 enum TCLF_FN_FLAGS{
@@ -85,24 +85,24 @@ enum TCLF_FN_FLAGS{
 	TCLF_FN_NATIVE, 
 	TCLF_FN_RAW, 
 };
-struct _TCLF_KV{
+struct TCLF_KV{
 	size_t kHash;
+	struct TCL_String *key;
 	enum TCLF_FN_FLAGS flags;
 	struct TCLS_Commands *cmds;
 	void (*fn)();
-	struct TCL_String *value;
 };
 struct TCLF_Scope{
 	int32_t length;
 	int32_t capacity;
-	struct _TCLF_KV kv[];
+	struct TCLF_KV kv[];
 };
 //
 enum TCLR_FLAGS{
 	TCLR_NONE_LAYER = 0,
 	TCLR_FULL_LAYER = 1,
 	TCLR_NEGATIVE_LAYER = 2,
-}
+};
 struct TCLR_Context{
 	//
 	int32_t instruction;
@@ -111,8 +111,10 @@ struct TCLR_Context{
 	struct TCLS_Commands *program;
 	struct TCL_String (*parseStack)[TCLR_STACK_SIZE];
 	struct TCL_Scope *scope;
+	struct TCLF_Scope *fnScope;
 	struct TCLR_Context *parent;
 	struct TCLR_Context *vparent;
+	struct TCL_StringArena *arena;
 };
 
 // ========== typedefs
@@ -126,8 +128,10 @@ typedef struct TCL_SliceArena TCL_SliceArena;
 typedef enum TCLS_CMD_FLAGS TCLS_CMD_FLAGS;
 typedef struct TCLS_Commands TCLS_Commands;
 //
+typedef struct TCLF_KV TCLF_KV;
 typedef struct TCLF_Scope TCLF_Scope;
 //
+typedef enum TCLR_FLAGS TCLR_FLAGS;
 typedef struct TCLR_Context TCLR_Context;
 
 #endif

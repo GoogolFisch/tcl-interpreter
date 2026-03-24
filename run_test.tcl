@@ -1,6 +1,6 @@
 
 
-set usingExe "./build/tcl-i"
+set usingExe "./build/tcl.out"
 if {![file exists $usingExe]} {
 	puts "$usingExe seems to not exists"
 	#error
@@ -19,11 +19,11 @@ proc run-tcl {usingExe run} {
 
 	if {$output1 != $output2} {
 		puts "Error in $run"
-		puts "1===="
+		puts "<<<<<"
 		puts $output1
-		puts "2===="
-		puts $output2
 		puts "====="
+		puts $output2
+		puts ">>>>>"
 		return 1
 	}
 	return 0

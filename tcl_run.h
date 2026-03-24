@@ -17,6 +17,8 @@ TCLR_Context *tclr_make_context(TCLR_Context *ctx,TCLR_FLAGS flag){
 	cOut->scope = NULL;
 	cOut->parent = ctx;
 	cOut->vparent = NULL;
+	cOut->arena = (ctx == NULL) ? NULL : ctx->arena;
+	//
 	if(flag & TCLR_NEGATIVE_LAYER)
 		cOut->vparent = ctx;
 
@@ -30,6 +32,12 @@ void tclr_free_context(TCLR_Context *ctx){
 		free(ctx->parseStack[i]);
 	}
 	free(ctx);
+}
+TCL_String *tclr_get_bracketStr(TCL_String *str,int32_t *index){
+	str = str;
+	index = index;
+	// TODO
+	return NULL;
 }
 TCL_String *tclr_get_var_slice(TCL_String *str,int32_t *index){
 	int32_t beginn = *index;
@@ -86,46 +94,48 @@ TCL_String *tclr_compile_str(TCLR_Context *ctx,int32_t *stack,TCL_String *base){
 	outStr->tags = 0;
 	char state = 0;
 	for(int32_t strIdx = 0;strIdx < base->length;strIdx++){
-		if(baseStr[strIdx] == '\\' && state == 0)
+		if(base->data[strIdx] == '\\' && state == 0)
 			state = 1;
 		else state = 0;
 		//
-		if(baseStr[strIdx] == '[' && baseStr[strIdx + 1] == ']'){
+		if(base->data[strIdx] == '[' && base->data[strIdx + 1] == ']'){
 			TCL_String *stStr = ctx->parseStack[*stack];
 			(*stack)++;
 			tcl_string_cp(&outStr,stStr);
 			continue;
 		}
-		if(baseStr[strIdx] == '$' && state == 0){
+		if(base->data[strIdx] == '$' && state == 0){
 			int32_t ofVar = strIdx;
-			TCL_String *varStr = tclr_get_var_slice(baseStr,&ofVar);
+			TCL_String *varStr = tclr_get_var_slice(base,&ofVar);
 			// TODO indexing with ( and )
-			TCL_String *fetch = tcl_get_from_scope(&ctx,varStr);
+			TCL_String *fetch = tcl_get_from_scope(&(ctx->scope),varStr);
 			free(varStr);
-			free(fetch);
 			tcl_string_cp(&outStr,fetch);
+			free(fetch);
 			continue;
 		}
-		if(baseStr[strIdx] == '$' && state == 1)
+		if(base->data[strIdx] == '$' && state == 1)
 			outStr->length--;
-		outStr->data[outStr->length] = baseStr[strIdx];
+		outStr->data[outStr->length] = base->data[strIdx];
 		outStr->length++;
 	}
+	return outStr;
 }
 
 void tclr_step_instruction(TCLR_Context **ctx_ptr){
 	TCLR_Context *ctx = *ctx_ptr;
 	if(ctx == NULL)return;
-	if((*ctx_ptr)->program->length <= (*ctx)->instruction){
-		TCLR_Context *freeing = *ctx;
+	if((*ctx_ptr)->program->length <= ctx->instruction){
+		TCLR_Context *freeing = ctx;
 		*ctx_ptr = (*ctx_ptr)->parent;
-		tlcr_free_context(freeing);
+		tclr_free_context(freeing);
 		return;
 	}
 	struct _TCLS_Cmd *curCmd = (*ctx_ptr)->program->commands[(*ctx_ptr)->instruction];
-	struct _TCLF_KV *fnIdx = tclf_get_function(scope,str);
+	struct TCLF_KV *fnIdx = tclf_get_function(ctx->fnScope,curCmd->command);
 
-	if(fnIdx == TCLF_FN_NATIVE){
+	// TODO
+	if(fnIdx->flags == TCLF_FN_NATIVE){
 	}
 }
 

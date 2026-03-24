@@ -8,15 +8,20 @@
 
 
 TCL_String *tcls_string_from_array(uint8_t str[],int32_t length,int32_t *index);
-void tcls_insert_command(TCL_Commands *cmd,TCL_String *str,
+void tcls_insert_command(TCLS_Commands **cmd,TCL_String *str,
 		int32_t *strIdx,TCLS_CMD_FLAGS flags);
+void tcls_insert_command(TCLS_Commands **cmd,TCL_String *str,
+		int32_t *strIdx,TCLS_CMD_FLAGS flags);
+TCLS_Commands *tcls_parse_commands(TCL_String *str);
 
 // until where
 int32_t _tcls_string_get_length_array(uint8_t str[],int32_t length,int32_t index,
 		int32_t preFlags){
+	preFlags ^= preFlags;
+	if(length <= index)return 0;
 	int32_t stringOffsets[TCLS_STRING_DEPTH];
-	int32_t stackIdx = 0;
-	int32_t beginning = index;
+	int32_t stackIdx = 0 + preFlags;
+	//int32_t beginning = index;
 	int32_t ending = index;
 	char state = 0;
 	if(str[index] != '"' && str[index] != '{' && str[index] != '['){
@@ -28,7 +33,7 @@ int32_t _tcls_string_get_length_array(uint8_t str[],int32_t length,int32_t index
 				if(str[ending] == ';')
 					break;
 				if(str[ending] == '\\')
-					state = 1
+					state = 1;
 			}
 			else{
 				state = 0;
@@ -41,22 +46,22 @@ int32_t _tcls_string_get_length_array(uint8_t str[],int32_t length,int32_t index
 	stringOffsets[stackIdx] = index;
 	while(ending < length){
 		if(state == 0){
-			if(str[ending] == '"' && *(stringOffsets[stackIdx]) == '"'){
+			if(str[ending] == '"' && str[stringOffsets[stackIdx]] == '"'){
 				stackIdx--;
 			}
-			if(str[ending] == ']' && *(stringOffsets[stackIdx]) == '['){
+			if(str[ending] == ']' && str[stringOffsets[stackIdx]] == '['){
 				stackIdx--;
 			}
-			if(str[ending] == '}' && *(stringOffsets[stackIdx]) == '{'){
+			if(str[ending] == '}' && str[stringOffsets[stackIdx]] == '{'){
 				stackIdx--;
 			}
 			if(str[ending] == '{'){
-				stringOffsets[stackIdx] = *index;
+				stringOffsets[stackIdx] = index;
 				stackIdx++;
 			}
 			// also use preFlags
-			if(str[ending] == '[' && *(stringOffsets[0]) == '"'){
-				stringOffsets[stackIdx] = *index;
+			if(str[ending] == '[' && str[stringOffsets[0]] == '"'){
+				stringOffsets[stackIdx] = index;
 				stackIdx++;
 			}
 			if(str[ending] == '\\'){
@@ -72,7 +77,7 @@ int32_t _tcls_string_get_length_array(uint8_t str[],int32_t length,int32_t index
 	return ending;
 }
 
-TCL_String _tcls_make_string_from_bound(uint8_t str[],int32_t lower,int32_t upper){
+TCL_String *_tcls_make_string_from_bound(uint8_t str[],int32_t lower,int32_t upper){
 	TCL_String *strOut = malloc(sizeof(TCL_String) +
 			sizeof(char) * (upper - lower));
 	strOut->refs = 0;
@@ -129,21 +134,21 @@ TCL_String _tcls_make_string_from_bound(uint8_t str[],int32_t lower,int32_t uppe
 		}
 	}
 	return strOut;
-g
+}
 
 // ending of the seperating char
 TCL_String *tcls_string_from_array(uint8_t str[],int32_t length,int32_t *index){
 	int32_t beginning = *index;
-	int32_t ending = _tcls_string_get_length_array(str,length,*index);
-	if(ending < 0)
+	int32_t ending = _tcls_string_get_length_array(str,length,*index,0);
+	if(ending <= 0)
 		return NULL;
 	if(ending > length)
 		return NULL;
 	*index = ending;
 	TCL_String *strOut;
-	if(str[beginning] == '"' %% str[beginning] != '{'){
+	if(length <= beginning && str[beginning] == '"' && str[beginning] != '{'){
 		strOut = _tcls_make_string_from_bound(str,beginning,ending);
-		if(str[beginning] = '"')
+		if(str[beginning] == '"')
 			strOut->tags = TCL_ST_Variable;
 	}else{
 		strOut = _tcls_make_string_from_bound(str,beginning + 1,ending - 1);
@@ -154,7 +159,9 @@ TCL_String *tcls_string_from_array(uint8_t str[],int32_t length,int32_t *index){
 
 
 void _tcls_sub_parse_arguments(TCL_String *str,TCLS_Commands *tcmd,
-		struct _TCLS_Cmd *cmd,int32_t *index){
+		struct _TCLS_Cmd **ptr_cmd,int32_t *index){
+	struct _TCLS_Cmd *cmd = *ptr_cmd;
+	tcmd = tcmd;
 	// TODO: also add variable concat stuff!
 	while(*index < str->length){
 		// break
@@ -167,15 +174,6 @@ void _tcls_sub_parse_arguments(TCL_String *str,TCLS_Commands *tcmd,
 		else if(str->data[*index] == '\r')
 			break;
 		//
-		if(cmd->capacity <= cmd->length){
-			if(cmd->capacity == 0)
-				cmd->capacity = TCL_MIN_CAPACITY;
-			else cmd->capacity *= 2;
-			tcmd->commands[tcmd->length - 1] = 
-				realloc(sizeof(struct _TCLS_Cmd) +
-						sizeof(TCL_String *) * cmd->capacity);
-		}
-		//
 		TCL_String *cc = malloc(sizeof(TCL_String) +
 				sizeof(char) * TCL_MIN_CAPACITY);
 		cc->capacity = TCL_MIN_CAPACITY;
@@ -184,31 +182,43 @@ void _tcls_sub_parse_arguments(TCL_String *str,TCLS_Commands *tcmd,
 		cc->length = 0;
 		//TCL_String *cc = tcls_string_from_array(
 		//		str->data,str->length,index);
-		int strIdx = 0;
+		int strIdx = *index;
 		while(strIdx < str->length){
+			// TODO TODOOO
 			//int32_t _tcls_string_get_length_array(
 			//	uint8_t str[],int32_t length,int32_t index,
 
-			if(strIdx->data[strIdx] == '{'){
+			if(str->data[strIdx] == '{'){
+				// already having a function that does this?
 			}
-			if(strIdx->data[strIdx] == '['){
+			if(str->data[strIdx] == '['){
 				// this is the best part!
-
 			}
 
 
 
 			strIdx++;
 		}
+		//
+		if(cmd->capacity <= cmd->length){
+			if(cmd->capacity == 0)
+				cmd->capacity = TCL_MIN_CAPACITY;
+			else cmd->capacity *= 2;
+			cmd = realloc(cmd,sizeof(struct _TCLS_Cmd) +
+						sizeof(TCL_String *) * cmd->capacity);
+			*ptr_cmd = cmd;
+		}
 		cmd->arguments[cmd->length] = cc;
 		cmd->length++;
+		*index = strIdx;
 	}
 }
 
-void _tcls_sub_expr_cmd(TCL_Commands **cmd,
+void _tcls_sub_expr_cmd(TCLS_Commands **cmd,
 		TCL_String *outStr,int32_t *strIdx){
-	char extraState;
+	//char extraState;
 	int32_t beg;
+	strIdx = strIdx;
 	// TODO add single [ ] multi run
 	while(beg){
 		beg = 0;
@@ -217,24 +227,24 @@ void _tcls_sub_expr_cmd(TCL_Commands **cmd,
 		outStr->length++;
 		if(outStr->data[beg] == ';'){
 			beg = 1;
-			cmd->commands[cmd->length - 1]->flags = TCLS_CMD_NORMAL;
+			(*cmd)->commands[(*cmd)->length - 1]->flags = TCLS_CMD_NORMAL;
 		}
 	}
 }
 
-TCL_String *_tcls_cmd_get_string(TCL_Commands **cmd,TCL_String *str,
+TCL_String *_tcls_cmd_get_string(TCLS_Commands **cmd,TCL_String *str,
 		int32_t *strIdx){
 	int32_t start = *strIdx;
-	int32_t ending = _tcls_string_get_length_array(&(str->data),
-			str->length - start,start);
+	int32_t ending = _tcls_string_get_length_array(str->data,
+			str->length - start,start,0);
 	int32_t idx = start;
 	TCL_String *outStr;
 
-	int32_t idx = start;
+	//int32_t idx = start;
 	//(*strIdx) = *idx;
 
-	if(str->data[*start] == '{'){
-		outStr = tcls_string_from_array(&(str->data),ending - start,&idx);
+	if(str->data[start] == '{'){
+		outStr = tcls_string_from_array(str->data,ending - start,&idx);
 		(*strIdx) = idx;
 		return outStr;
 	}
@@ -242,47 +252,48 @@ TCL_String *_tcls_cmd_get_string(TCL_Commands **cmd,TCL_String *str,
 	outStr = malloc(sizeof(TCL_String) + sizeof(char) * (ending - start));
 	int32_t stringOffsets[TCLS_STRING_DEPTH];
 	int32_t stackIdx = 0;
+	int32_t beg;
 	char state = 0;
 	for(idx = start;idx < ending;idx++){
-		if(state & 1 == 0){
-			if(str[ending] == '"' && *(stringOffsets[stackIdx]) == '"'){
+		if((state & 1) == 0){
+			if(str->data[ending] == '"' && str->data[stringOffsets[stackIdx]] == '"'){
 				stackIdx--;
 			}
-			if(str[ending] == ']' && *(stringOffsets[stackIdx]) == '['){
+			if(str->data[ending] == ']' && str->data[stringOffsets[stackIdx]] == '['){
 				stackIdx--;
 				if(stackIdx == 0){
 					state &= ~2;
-					//
-					beg = strinOffsets[stackIdx + 1] + 1;
-					extraState = 1;
-					_tcls_sub_expr_cmd(cmd,outStr,strIdx);
+					// TODO ???
+					beg = stringOffsets[stackIdx + 1] + 1;
+					//extraState = 1;
+					_tcls_sub_expr_cmd(cmd,outStr,&beg);
 				}
 			}
-			if(str[ending] == '}' && *(stringOffsets[stackIdx]) == '{'){
+			if(str->data[ending] == '}' && str->data[stringOffsets[stackIdx]] == '{'){
 				stackIdx--;
 			}
-			if(str[ending] == '{'){
-				stringOffsets[stackIdx] = *index;
+			if(str->data[ending] == '{'){
+				stringOffsets[stackIdx] = idx;
 				stackIdx++;
 			}
 			// also use preFlags
-			if(str[ending] == '['){
-				stringOffsets[stackIdx] = *index;
+			if(str->data[ending] == '['){
+				stringOffsets[stackIdx] = idx;
 				stackIdx++;
 			}
-			if(str[ending] == '\\'){
+			if(str->data[ending] == '\\'){
 				state = 1;
 				continue;
 			}
 			// exclude everything in [ ]
-			if(state & 2 == 0){
-				outStr->data[outStr->length] = str[ending];
+			if((state & 2) == 0){
+				outStr->data[outStr->length] = str->data[ending];
 				outStr->length++;
-				if(str[ending] == '[' && stackIdx == 1)
+				if(str->data[ending] == '[' && stackIdx == 1)
 					state |= 4;
 			}
 		}
-		else if(state & 1 == 1)state &= (~1);
+		else if((state & 1) == 1)state &= (~1);
 		if(stackIdx == 0)break;
 	}
 
@@ -291,7 +302,7 @@ TCL_String *_tcls_cmd_get_string(TCL_Commands **cmd,TCL_String *str,
 	return outStr;
 }
 
-void tcls_insert_command(TCL_Commands **cmd,TCL_String *str,
+void tcls_insert_command(TCLS_Commands **cmd,TCL_String *str,
 		int32_t *strIdx,TCLS_CMD_FLAGS flags){
 	struct _TCLS_Cmd *icmd = malloc(sizeof(struct _TCLS_Cmd) +
 			sizeof(TCL_String) * 0);
@@ -299,10 +310,10 @@ void tcls_insert_command(TCL_Commands **cmd,TCL_String *str,
 	icmd->capacity = 0;
 	icmd->flags = flags;
 	icmd->stackDepth = 0;
-	icmd->commands = NULL;
+	icmd->command = NULL;
 	icmd->moreData = NULL;
 
-	icmd->commands = _tcls_cmd_get_string(cmd,str,strIdx);
+	icmd->command = _tcls_cmd_get_string(cmd,str,strIdx);
 
 	while(1){
 		if(str->data[*strIdx] == '\n') break;
@@ -315,20 +326,20 @@ void tcls_insert_command(TCL_Commands **cmd,TCL_String *str,
 		if(icmd->capacity <= icmd->length){
 			icmd->capacity *= 2;
 			if(icmd->capacity == 0)icmd->capacity = TCL_MIN_CAPACITY;
-			icmd = realloc(sizeof(struct _TCLS_Cmd) +
+			icmd = realloc(icmd,sizeof(struct _TCLS_Cmd) +
 					sizeof(TCL_String) * icmd->capacity);
 		}
 		//
-		icmd->arguments[icmd->length] = _tcl_cmd_get_string(cmd,str,strIdx);
+		icmd->arguments[icmd->length] = _tcls_cmd_get_string(cmd,str,strIdx);
 		icmd->length++;
 	}
 
 	if((*cmd)->length >= (*cmd)->capacity){
 		(*cmd)->capacity *= 2;
-		(*cmd) = realloc(sizeof(TCLS_Commands) +
+		(*cmd) = realloc(*cmd,sizeof(TCLS_Commands) +
 			sizeof(struct _TCLS_Cmd*) * (*cmd)->capacity);
 	}
-	(*cmd)->commands[cmd->length] = icmd;
+	(*cmd)->commands[(*cmd)->length] = icmd;
 	(*cmd)->length++;
 }
 
@@ -341,30 +352,31 @@ TCLS_Commands *tcls_parse_commands(TCL_String *str){
 	tcmd->capacity = TCL_MIN_CAPACITY;
 
 	int32_t cmdBeginn = 0;
-	int32_t cmdEnd = str->length;
+	//int32_t cmdEnd = str->length;
 	int32_t cmdIdx = 0;
 
 	while(cmdBeginn < str->length){
 		TCL_String *cmd = tcls_string_from_array(
 				str->data,str->length,&cmdIdx);
-		if(tcmd->length >= tcmd->capacity){
+		if(cmd == NULL)break;
+		struct _TCLS_Cmd *lowCmd = malloc(sizeof(struct _TCLS_Cmd));
+		lowCmd->moreData = NULL;
+		lowCmd->length = 0;
+		lowCmd->capacity = 0;
+		lowCmd->command = cmd;
+		// todo add more!
+		while(cmdIdx < str->length && str->data[cmdIdx] == ' '){
+			cmdIdx++;
+			_tcls_sub_parse_arguments(str,tcmd,&lowCmd,&cmdIdx);
+			// break on '\n\r;'
+		}
+		if(tcmd->capacity <= tcmd->length){
 			tcmd->capacity *= 2;
-			tcmd = realloc(sizeof(TCLS_Commands) +
+			tcmd = realloc(tcmd,sizeof(TCLS_Commands) +
 				sizeof(struct _TCLS_Cmd*) * tcmd->capacity);
 		}
 		int32_t cm = tcmd->length++;
-		tcmd->commands[cm] = malloc(sizeof(struct _TCLS_Cmd));
-		tcmd->commands[cm]->moreData = NULL;
-		tcmd->commands[cm]->length = 0;
-		tcmd->commands[cm]->capacity = 0;
-		tcmd->commands[cm]->command = cmd;
-		// todo add more!
-		while(str->data[cmdIdx] == ' '){
-			cmdIdx++;
-			_tcls_sub_parse_arguments(str,tcmd,tcmd->commands[cm],&cmdIdx);
-			// break on '\n\r;'
-		}
-
+		tcmd->commands[cm] = lowCmd;
 	}
 
 	return tcmd;

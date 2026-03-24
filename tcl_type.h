@@ -10,12 +10,14 @@
 // ========== declerations
 
 size_t tcl_hash_string(TCL_String *string);
-size_t tcl_hash_array(char *arr,int32_t length);
-char tcl_string_eq(TCL_String *cmp,TCL_String *str);
-void tcl_string_cp(TCL_String *into,TCL_String *from);
+size_t tcl_hash_array(uint8_t *arr,int32_t length);
+char tcl_string_eq(TCL_String *str,TCL_String *cmp);
+char tcl_string_slice_eq(TCL_String *str,TCL_Slice *cmp);
+void tcl_string_cp(TCL_String **into,TCL_String *from);
 
 TCL_Slice *tcl_get_slice_of(TCL_SliceArena **sliceArena,
 		TCL_String *string,int32_t start,int32_t end);
+TCL_String *tcl_create_string(int32_t length,char *data);
 
 // scope stuff
 void tcl_set_into_scope(TCL_Scope **stringScope,
@@ -34,9 +36,9 @@ void TCL_garbage_collect_string_arena(TCL_StringArena **stringArena);
 
 // ========== functions
 size_t tcl_hash_string(TCL_String *string){
-	return tcl_hash_array(&(string->data),string->length);
+	return tcl_hash_array(string->data,string->length);
 }
-size_t tcl_hash_array(char *arr,int32_t length){
+size_t tcl_hash_array(uint8_t *arr,int32_t length){
 	size_t hash = 0;
 	/*
 	switch(length & 3){
@@ -59,7 +61,7 @@ size_t tcl_hash_array(char *arr,int32_t length){
 	}
 	return hash;
 }
-char tcl_string_eq(TCL_String *cmp,TCL_String *str){
+char tcl_string_eq(TCL_String *str,TCL_String *cmp){
 	if(str->length != cmp->length)
 		return 0;
 	// this is very unlikely
@@ -72,6 +74,19 @@ char tcl_string_eq(TCL_String *cmp,TCL_String *str){
 	}
 	return 1;
 }
+char tcl_string_slice_eq(TCL_String *str,TCL_Slice *cmp){
+	if(str->length != cmp->length)
+		return 0;
+	// this is very unlikely
+	if(str == cmp->string)
+		return 1;
+	for(int over = 0;over < str->length;over++){
+		if((cmp->string)->data[over + cmp->offset] != str->data[over]){
+			return 0;
+		}
+	}
+	return 1;
+}
 void tcl_string_cp(TCL_String **into,TCL_String *from){
 	char sizeChange = 0;
 	while((*into)->capacity <= (*into)->length + from->length){
@@ -79,7 +94,7 @@ void tcl_string_cp(TCL_String **into,TCL_String *from){
 		sizeChange = 1;
 	}
 	if(sizeChange){
-		(*into) = realloc(sizeof(TCL_String) +
+		(*into) = realloc(*into,sizeof(TCL_String) +
 				sizeof(char) * (*into)->capacity);
 	}
 	for(int idx = 0;idx < from->length;idx++){
@@ -93,8 +108,8 @@ TCL_Slice *tcl_get_slice_of(TCL_SliceArena **sliceArena,
 
 	if((*sliceArena)->length >= (*sliceArena)->capacity){
 		(*sliceArena)->capacity *= 2;
-		*sliceArena = realloc(sizeof(TCL_SliceArena) +
-				sizeof(TCL_String) * (*sliceArena)->capacity;
+		*sliceArena = realloc(*sliceArena,sizeof(TCL_SliceArena) +
+				sizeof(TCL_String) * (*sliceArena)->capacity);
 	}
 	TCL_SliceArena *arena = *sliceArena;
 
@@ -108,6 +123,17 @@ TCL_Slice *tcl_get_slice_of(TCL_SliceArena **sliceArena,
 	slice->refs++; // ???
 	return slice;
 }
+TCL_String *tcl_create_string(int32_t length,char *data){
+	TCL_String *strOut = malloc(sizeof(TCL_String) +
+			sizeof(char) * length);
+	strOut->length = length;
+	strOut->capacity = length;
+	strOut->refs = 0;
+	for(int32_t idx = 0;idx < length;idx++)
+		strOut->data[idx] = data[idx];
+
+	return strOut;
+}
 
 void tcl_set_into_scope(TCL_Scope **stringScope,
 		TCL_String *key,TCL_String *value){
@@ -117,6 +143,7 @@ void tcl_set_into_scope(TCL_Scope **stringScope,
 	int idx;
 	size_t hash = tcl_hash_string(key);
 	for(idx = 0;idx < scope->length;idx++){
+		if(scope->kv[idx].kHash != hash)continue;
 		if(!tcl_string_eq(scope->kv[idx].key,key))
 			continue;
 		oldValue = scope->kv[idx].value;
@@ -135,12 +162,12 @@ void tcl_insert_into_scope(TCL_Scope **stringScope,
 		TCL_String *key,TCL_String *value){
 	if((*stringScope)->length >= (*stringScope)->capacity){
 		(*stringScope)->capacity *= 2;
-		*stringScope = realloc(sizeof(TCL_Scope) +
-				sizeof(struct _TCL_KV) * (*stringScope)->capacity;
+		*stringScope = realloc(*stringScope,sizeof(TCL_Scope) +
+				sizeof(struct _TCL_KV) * (*stringScope)->capacity);
 	}
 	TCL_Scope *scope = *stringScope;
 
-	struct _TCK_KV *kv = &(scope->kv[scope->length++]);
+	struct _TCL_KV *kv = &(scope->kv[scope->length++]);
 	size_t hash = tcl_hash_string(key);
 	kv->kHash = hash;
 	kv->key = key;
@@ -165,7 +192,7 @@ TCL_String *tcl_get_from_scope_slice(TCL_Scope **stringScope,TCL_Slice *key){
 	size_t hash = tcl_hash_array(&(key->string->data[key->offset]),key->length);
 	for(int idx = 0;idx < scope->length;idx++){
 		if(hash != scope->kv[idx].kHash)continue;
-		if(!tcl_string_eq(scope->kv[idx].value,key))
+		if(!tcl_string_slice_eq(scope->kv[idx].key,key))
 			continue;
 		return scope->kv[idx].value;
 	}
@@ -192,26 +219,26 @@ TCL_Scope *tcl_create_scope(void){
 // stringArena
 TCL_StringArena *tcl_create_string_arena(void){
 	TCL_StringArena *arena = malloc(sizeof(TCL_StringArena) +
-			sizeof(*TCL_String) * TCL_MIN_CAPACITY);
+			sizeof(TCL_String*) * TCL_MIN_CAPACITY);
 
 	arena->length = 0;
 	arena->capacity = TCL_MIN_CAPACITY;
-	return scope;
+	return arena;
 }
 void TCL_set_string_arena(TCL_StringArena **stringArena,TCL_String *string){
 	if((*stringArena)->length >= (*stringArena)->capacity){
 		(*stringArena)->capacity *= 2;
-		*stringArena = realloc(sizeof(TCL_Scope) +
-				sizeof(struct _TCL_KV) * (*stringArena)->capacity;
+		*stringArena = realloc(*stringArena,sizeof(TCL_Scope) +
+				sizeof(struct _TCL_KV) * (*stringArena)->capacity);
 	}
-	TCL_Scope *arena = *stringArena;
+	TCL_StringArena *arena = *stringArena;
 
 	arena->string[arena->length++] = string;
 }
 void TCL_garbage_collect_string_arena(TCL_StringArena **stringArena){
-	TCL_Scope *arena = *stringArena;
+	TCL_StringArena *arena = *stringArena;
 	for(int idx = 0;idx < arena->length;idx++){
-		TCL_String *string = *(arena->string[idx]);
+		TCL_String *string = arena->string[idx];
 		if(string->refs)continue;
 		arena->string[idx] = arena->string[arena->length - 1];
 		arena->length--;
