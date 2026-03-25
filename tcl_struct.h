@@ -63,7 +63,7 @@ enum TCLS_CMD_FLAGS {
 	TCLS_CMD_NORMAL = 0,
 	TCLS_CMD_PUSH = 1
 };
-struct _TCLS_Cmd{
+struct TCLS_Cmd{
 	int32_t length;
 	int32_t capacity;
 	enum TCLS_CMD_FLAGS flags;
@@ -77,7 +77,7 @@ struct TCLS_Commands{
 	int32_t tags;
 	int32_t length;
 	int32_t capacity;
-	struct _TCLS_Cmd *(commands[]);
+	struct TCLS_Cmd *(commands[]);
 };
 //
 enum TCLF_FN_FLAGS{
@@ -90,7 +90,7 @@ struct TCLF_KV{
 	struct TCL_String *key;
 	enum TCLF_FN_FLAGS flags;
 	struct TCLS_Commands *cmds;
-	void (*fn)();
+	void *(natFn);
 };
 struct TCLF_Scope{
 	int32_t length;
@@ -126,6 +126,7 @@ typedef struct TCL_StringArena TCL_StringArena;
 typedef struct TCL_SliceArena TCL_SliceArena;
 //
 typedef enum TCLS_CMD_FLAGS TCLS_CMD_FLAGS;
+typedef struct TCLS_Cmd TCLS_Cmd;
 typedef struct TCLS_Commands TCLS_Commands;
 //
 typedef struct TCLF_KV TCLF_KV;
@@ -133,5 +134,7 @@ typedef struct TCLF_Scope TCLF_Scope;
 //
 typedef enum TCLR_FLAGS TCLR_FLAGS;
 typedef struct TCLR_Context TCLR_Context;
+// ======= fn typdef
+typedef void (*TCLF_NAT_FN)(TCLR_Context **ctx,TCLS_Cmd *cmd);
 
 #endif

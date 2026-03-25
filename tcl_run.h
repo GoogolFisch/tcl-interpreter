@@ -14,10 +14,14 @@ TCLR_Context *tclr_make_context(TCLR_Context *ctx,TCLR_FLAGS flag){
 	cOut->parseStackIdx = 0;
 	cOut->flags = flag;
 	cOut->program = NULL;
-	cOut->scope = NULL;
+	cOut->scope = malloc(sizeof(TCL_Scope) +
+			sizeof(struct _TCL_KV) * TCL_MIN_CAPACITY);
+	cOut->scope->length = 0;
+	cOut->scope->capacity = TCL_MIN_CAPACITY;
 	cOut->parent = ctx;
 	cOut->vparent = NULL;
 	cOut->arena = (ctx == NULL) ? NULL : ctx->arena;
+	cOut->fnScope = (ctx == NULL) ? NULL : ctx->fnScope;
 	//
 	if(flag & TCLR_NEGATIVE_LAYER)
 		cOut->vparent = ctx;
@@ -131,12 +135,21 @@ void tclr_step_instruction(TCLR_Context **ctx_ptr){
 		tclr_free_context(freeing);
 		return;
 	}
-	struct _TCLS_Cmd *curCmd = (*ctx_ptr)->program->commands[(*ctx_ptr)->instruction];
+	struct TCLS_Cmd *curCmd = ctx->program->commands[ctx->instruction];
+	if(curCmd->command == NULL){
+		printf("(15f3ecff-6441-443f-b8c7-ea7b1656697e)\n");
+	}
 	struct TCLF_KV *fnIdx = tclf_get_function(ctx->fnScope,curCmd->command);
+	if(fnIdx == NULL){
+		printf("Not finding %.*s function.\n"
+				,curCmd->command->length,curCmd->command->data);
+	}
 
 	// TODO
 	if(fnIdx->flags == TCLF_FN_NATIVE){
+		((TCLF_NAT_FN)(fnIdx->natFn))(&ctx,curCmd);
 	}
+	ctx->instruction++;
 }
 
 #endif

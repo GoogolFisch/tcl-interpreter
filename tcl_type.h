@@ -54,10 +54,10 @@ size_t tcl_hash_array(uint8_t *arr,int32_t length){
 		hash ^= hash >> 11;
 	} */
 	for(int32_t idx = 0;idx < length;idx++){
-		hash += (hash << (sizeof(size_t) * 4 + 3)) ^
-			(hash << (sizeof(size_t) * 2 + 1));
+		hash += (hash << (sizeof(hash) * 4 + 3)) ^
+			(hash << (sizeof(hash) * 2 + 1));
 		hash += arr[idx];
-		hash ^= (hash >> 11) + (hash >> (sizeof(size_t) * 3 + 2));
+		hash ^= (hash >> 11) + (hash >> (sizeof(hash) * 3 + 2));
 	}
 	return hash;
 }

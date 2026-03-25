@@ -36,12 +36,35 @@ int32_t set_variable(int32_t argc,char **argv,char **env){
 	return 0;
 }
 
+void testFn(TCLR_Context **ctx,TCLS_Cmd *cmd){
+	ctx = ctx;
+	printf("fn %.*s\n",cmd->command->length,cmd->command->data);
+	for(int32_t i = 0;i < cmd->length;i++){
+		printf("- %.*s\n",cmd->arguments[i]->length,cmd->arguments[i]->data);
+	}
+	cmd = cmd;
+	printf("Hello World\n");
+}
+#define makeStr(var,msg) TCL_String *var;                                      \
+ var = malloc(sizeof(TCL_String) + sizeof(char) * sizeof(msg));                \
+ var->capacity = sizeof(msg);                                                  \
+ var->length = sizeof(msg) - 1;                                                    \
+ for(int32_t __var_o = 0;__var_o < (int32_t)sizeof(msg);__var_o++){            \
+  var->data[__var_o] = msg[__var_o];                                           \
+ }
+
 int32_t make_and_run(int32_t length,char *fData){
 	// TODO
+	TCLF_Scope *fnScope = tclf_make_function_scope();
+	//
+	makeStr(testFunc,"puts");
+	tclf_insert_natFunction(&fnScope,testFunc,(void(*)())testFn);
+	//
 	TCL_StringArena *ar = tcl_create_string_arena();
 	TCL_String *str = tcl_create_string(length,fData);
 	TCLS_Commands *tcmd = tcls_parse_commands(str);
 	TCLR_Context *ctx = tclr_make_context(NULL,TCLR_FULL_LAYER);
+	ctx->fnScope = fnScope;
 	ctx->program = tcmd;
 	ctx->arena = ar;
 	while(ctx != NULL){
