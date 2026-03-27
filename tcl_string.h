@@ -165,9 +165,9 @@ void _tcls_sub_parse_arguments(TCL_String *str,TCLS_Commands *tcmd,
 	// TODO: also add variable concat stuff!
 	while(*index < str->length){
 		// break
-		if(str->data[*index] == ' ')
+		while(str->data[*index] == ' ')
 			(*index)++;
-		else if(str->data[*index] == ';')
+		if(str->data[*index] == ';')
 			break;
 		else if(str->data[*index] == '\n')
 			break;

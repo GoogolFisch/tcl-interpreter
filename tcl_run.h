@@ -43,22 +43,27 @@ TCL_String *tclr_get_bracketStr(TCL_String *str,int32_t *index){
 	// TODO
 	return NULL;
 }
+// TODO?
 TCL_String *tclr_get_var_slice(TCL_String *str,int32_t *index){
-	int32_t beginn = *index;
+	int32_t begin = *index;
 	int32_t ending;
 	int32_t idx;
 	char contains = 0;
+	TCL_String *outStr;
 	if(str->data[*index] == '{'){
 		ending = _tcls_string_get_length_array(
 				str->data,str->length,*index,0);
-		for(idx = beginn;idx < ending;idx++){
+		outStr = _tcls_make_string_from_bound(str->data,begin + 1,ending - 1);
+		return outStr;
+		/*
+		for(idx = begin;idx < ending;idx++){
+			// no $ parsing?
 			if(str->data[idx] == '$')
 				contains = 1;
 		}
-
-		return NULL;
+		return NULL; // */
 	}
-	TCL_String *outStr = malloc(sizeof(TCL_String) +
+	outStr = malloc(sizeof(TCL_String) +
 			sizeof(char) * TCL_MIN_CAPACITY);
 	outStr->capacity = TCL_MIN_CAPACITY;
 	outStr->length = 0;
@@ -145,6 +150,25 @@ void tclr_step_instruction(TCLR_Context **ctx_ptr){
 				,curCmd->command->length,curCmd->command->data);
 	}
 
+	struct TCLS_Cmd *execCmd = malloc(sizeof(struct TCLS_Cmd) + 
+			sizeof(TCLS_Cmd) * curCmd->length);
+	execCmd->length = curCmd->length;
+	execCmd->capacity = curCmd->length;
+	execCmd->stackDepth = curCmd->stackDepth;
+	if(fnIdx->flags & TCLF_FN_RAW){
+		execCmd->command = curCmd->command;
+		for(int32_t i = 0;i < curCmd->length;i++){
+			execCmd->arguments[i] = curCmd->arguments[i];
+		}
+	}
+	else{
+		int32_t stOff = ctx->parseStackIdx - execCmd->stackDepth;
+		ctx->parseStackIdx -= execCmd->stackDepth;
+		execCmd->command = tclr_compile_str(ctx,&stOff,curCmd->command);
+		for(int32_t i = 0;i < curCmd->length;i++){
+			execCmd->arguments[i] = curCmd->arguments[i];
+		}
+	}
 	// TODO
 	if(fnIdx->flags == TCLF_FN_NATIVE){
 		((TCLF_NAT_FN)(fnIdx->natFn))(&ctx,curCmd);
