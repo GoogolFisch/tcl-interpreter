@@ -2,11 +2,8 @@
 #include<stdlib.h>
 #include<stdint.h>
 #include<stdio.h>
-#include"tcl_struct.h"
-#include"tcl_type.h"
-#include"tcl_string.h"
-#include"tcl_function.h"
-#include"tcl_run.h"
+#include"tcl/include.h"
+#include"tcl/tcl_debug.h"
 
 // bla bla bla bla
 
@@ -42,8 +39,17 @@ void testFn(TCLR_Context **ctx,TCLS_Cmd *cmd){
 	for(int32_t i = 0;i < cmd->length;i++){
 		printf("- %.*s\n",cmd->arguments[i]->length,cmd->arguments[i]->data);
 	}
-	cmd = cmd;
-	printf("Hello World\n");
+}
+void setFn(TCLR_Context **ctx,TCLS_Cmd *cmd){
+	printf("fn %.*s\n",cmd->command->length,cmd->command->data);
+	for(int32_t i = 0;i < cmd->length;i++){
+		printf("- %.*s\n",cmd->arguments[i]->length,cmd->arguments[i]->data);
+	}
+	if(cmd->length != 2){
+		printf("Err with set (fa1889db-c6a3-4a1b-b927-96d77805c985)\n");
+		return;
+	}
+	tcl_set_into_scope(&((*ctx)->scope),cmd->arguments[0],cmd->arguments[1]);
 }
 #define makeStr(var,msg) TCL_String *var;                                      \
  var = malloc(sizeof(TCL_String) + sizeof(char) * sizeof(msg));                \
@@ -59,6 +65,8 @@ int32_t make_and_run(int32_t length,char *fData){
 	//
 	makeStr(testFunc,"puts");
 	tclf_insert_natFunction(&fnScope,testFunc,(void(*)())testFn);
+	makeStr(setFunc,"set");
+	tclf_insert_natFunction(&fnScope,setFunc,(void(*)())setFn);
 	//
 	TCL_StringArena *ar = tcl_create_string_arena();
 	TCL_String *str = tcl_create_string(length,fData);

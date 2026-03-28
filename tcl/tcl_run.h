@@ -32,9 +32,10 @@ void tclr_free_context(TCLR_Context *ctx){
 	if(ctx->parent == NULL){
 		// TODO
 	}
+	/* / ?????
 	for(int i = 0;i < ctx->parseStackIdx;i++){
 		free(ctx->parseStack[i]);
-	}
+	} //  */
 	free(ctx);
 }
 TCL_String *tclr_get_bracketStr(TCL_String *str,int32_t *index){
@@ -114,13 +115,16 @@ TCL_String *tclr_compile_str(TCLR_Context *ctx,int32_t *stack,TCL_String *base){
 			continue;
 		}
 		if(base->data[strIdx] == '$' && state == 0){
-			int32_t ofVar = strIdx;
+			int32_t ofVar = strIdx + 1;
 			TCL_String *varStr = tclr_get_var_slice(base,&ofVar);
 			// TODO indexing with ( and )
 			TCL_String *fetch = tcl_get_from_scope(&(ctx->scope),varStr);
 			free(varStr);
+			if(fetch == NULL){
+				printf("Variable not found! (475b4b5c-bc52-4517-82ac-a82fec7f7b25)\n");
+			}
 			tcl_string_cp(&outStr,fetch);
-			free(fetch);
+			//free(fetch);
 			continue;
 		}
 		if(base->data[strIdx] == '$' && state == 1)
@@ -144,29 +148,33 @@ void tclr_step_instruction(TCLR_Context **ctx_ptr){
 	if(curCmd->command == NULL){
 		printf("(15f3ecff-6441-443f-b8c7-ea7b1656697e)\n");
 	}
-	struct TCLF_KV *fnIdx = tclf_get_function(ctx->fnScope,curCmd->command);
-	if(fnIdx == NULL){
-		printf("Not finding %.*s function.\n"
-				,curCmd->command->length,curCmd->command->data);
-	}
-
 	struct TCLS_Cmd *execCmd = malloc(sizeof(struct TCLS_Cmd) + 
 			sizeof(TCLS_Cmd) * curCmd->length);
 	execCmd->length = curCmd->length;
 	execCmd->capacity = curCmd->length;
 	execCmd->stackDepth = curCmd->stackDepth;
+
+	int32_t stOff = execCmd->stackDepth;
+	execCmd->command = tclr_compile_str(ctx,&stOff,curCmd->command);
+	ctx->parseStackIdx -= execCmd->stackDepth;
+	struct TCLF_KV *fnIdx = tclf_get_function(ctx->fnScope,execCmd->command);
+	if(fnIdx == NULL){
+		printf("Not finding %.*s function.\n"
+				,curCmd->command->length,curCmd->command->data);
+		ctx->instruction++;
+		// TODO if fnIdx->flags == TCLF_FN_PUSH
+		return;
+	}
+
 	if(fnIdx->flags & TCLF_FN_RAW){
-		execCmd->command = curCmd->command;
 		for(int32_t i = 0;i < curCmd->length;i++){
 			execCmd->arguments[i] = curCmd->arguments[i];
 		}
 	}
 	else{
-		int32_t stOff = ctx->parseStackIdx - execCmd->stackDepth;
-		ctx->parseStackIdx -= execCmd->stackDepth;
-		execCmd->command = tclr_compile_str(ctx,&stOff,curCmd->command);
 		for(int32_t i = 0;i < curCmd->length;i++){
-			execCmd->arguments[i] = curCmd->arguments[i];
+			execCmd->arguments[i] = tclr_compile_str(
+					ctx,&stOff,curCmd->arguments[i]);
 		}
 	}
 	// TODO

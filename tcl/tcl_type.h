@@ -181,7 +181,7 @@ TCL_String *tcl_get_from_scope(TCL_Scope **stringScope,TCL_String *key){
 	size_t hash = tcl_hash_string(key);
 	for(int idx = 0;idx < scope->length;idx++){
 		if(hash != scope->kv[idx].kHash)continue;
-		if(!tcl_string_eq(scope->kv[idx].value,key))
+		if(!tcl_string_eq(scope->kv[idx].key,key))
 			continue;
 		return scope->kv[idx].value;
 	}

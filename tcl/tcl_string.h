@@ -18,7 +18,7 @@ TCLS_Commands *tcls_parse_commands(TCL_String *str);
 int32_t _tcls_string_get_length_array(uint8_t str[],int32_t length,int32_t index,
 		int32_t preFlags){
 	preFlags ^= preFlags;
-	if(length <= index)return 0;
+	if(length <= index)return -1;
 	int32_t stringOffsets[TCLS_STRING_DEPTH];
 	int32_t stackIdx = 0 + preFlags;
 	//int32_t beginning = index;
@@ -44,8 +44,10 @@ int32_t _tcls_string_get_length_array(uint8_t str[],int32_t length,int32_t index
 	}
 	// multi layered string
 	stringOffsets[stackIdx] = index;
+	ending++;
 	while(ending < length){
 		if(state == 0){
+			// MARK
 			if(str[ending] == '"' && str[stringOffsets[stackIdx]] == '"'){
 				stackIdx--;
 			}
@@ -69,7 +71,7 @@ int32_t _tcls_string_get_length_array(uint8_t str[],int32_t length,int32_t index
 			}
 		}
 		else if(state == 1)state = 0;
-		if(stackIdx == 0)break;
+		if(stackIdx < 0)break;
 		ending++;
 	}
 	if(ending >= length)
@@ -78,6 +80,8 @@ int32_t _tcls_string_get_length_array(uint8_t str[],int32_t length,int32_t index
 }
 
 TCL_String *_tcls_make_string_from_bound(uint8_t str[],int32_t lower,int32_t upper){
+	if(upper < lower)
+		*(size_t**)NULL = NULL;
 	TCL_String *strOut = malloc(sizeof(TCL_String) +
 			sizeof(char) * (upper - lower));
 	strOut->refs = 0;
@@ -148,13 +152,43 @@ TCL_String *tcls_string_from_array(uint8_t *str,int32_t length,int32_t *index){
 	TCL_String *strOut;
 	if(length >= beginning && str[beginning] != '"' && str[beginning] != '{'){
 		strOut = _tcls_make_string_from_bound(str,beginning,ending);
-		if(str[beginning] == '"')
-			strOut->tags = TCL_ST_Variable;
+		strOut->tags = TCL_ST_Variable;
 	}else{
 		strOut = _tcls_make_string_from_bound(str,beginning + 1,ending - 1);
-		strOut->tags = TCL_ST_Variable;
+		if(str[beginning] == '"')
+			strOut->tags = TCL_ST_Variable;
 	}
 	return strOut;
+}
+
+TCL_String *_tcls_var_mkString(TCL_String *str,TCLS_Commands *tcmd,
+		struct TCLS_Cmd **ptr_cmd,int32_t *index,int32_t ending){
+	tcmd = tcmd;
+	ptr_cmd = ptr_cmd;
+	//
+	TCL_String *cc = malloc(sizeof(TCL_String) +
+			sizeof(char) * (ending - *index));
+	cc->capacity = ending - *index;
+	cc->tags = TCL_ST_None;
+	cc->refs = 1;
+	cc->length = 0;
+	//TCL_String *cc = tcls_string_from_array(
+	//		str->data,str->length,index);
+	int32_t strIdx;
+	for(strIdx = *index;strIdx < ending;strIdx++){
+		// TODO TODOOO
+		if(str->data[strIdx] == '['){
+			// this is the best part!
+		}
+		if(cc->capacity <= cc->length){
+			cc->capacity *= 2;
+			cc = realloc(cc,sizeof(TCL_String) +
+					sizeof(char) * cc->capacity);
+		}
+		cc->data[cc->length] = str->data[strIdx];
+		cc->length++;
+	}
+	return cc;
 }
 
 
@@ -174,31 +208,18 @@ void _tcls_sub_parse_arguments(TCL_String *str,TCLS_Commands *tcmd,
 		else if(str->data[*index] == '\r')
 			break;
 		//
-		TCL_String *cc = malloc(sizeof(TCL_String) +
-				sizeof(char) * TCL_MIN_CAPACITY);
-		cc->capacity = TCL_MIN_CAPACITY;
-		cc->tags = TCL_ST_None;
-		cc->refs = 1;
-		cc->length = 0;
-		//TCL_String *cc = tcls_string_from_array(
-		//		str->data,str->length,index);
-		int strIdx = *index;
-		while(strIdx < str->length){
-			// TODO TODOOO
-			//int32_t _tcls_string_get_length_array(
-			//	uint8_t str[],int32_t length,int32_t index,
-
-			if(str->data[strIdx] == '{'){
-				// already having a function that does this?
-			}
-			if(str->data[strIdx] == '['){
-				// this is the best part!
-			}
-
-
-
-			strIdx++;
+		int32_t ending = _tcls_string_get_length_array(
+				str->data,str->length,*index,0);
+		if(ending < 0)break;
+		TCL_String *cc;
+		if(str->data[*index] == '{'){
+			cc = _tcls_make_string_from_bound(
+					str->data,*index + 1,ending - 1);
+		} else{
+			cc = _tcls_var_mkString(str,tcmd,ptr_cmd,index,ending);
+			cmd = *ptr_cmd;
 		}
+		*index = ending;
 		//
 		if(cmd->capacity <= cmd->length){
 			if(cmd->capacity == 0)
@@ -210,7 +231,7 @@ void _tcls_sub_parse_arguments(TCL_String *str,TCLS_Commands *tcmd,
 		}
 		cmd->arguments[cmd->length] = cc;
 		cmd->length++;
-		*index = strIdx;
+		//*index = strIdx;
 	}
 }
 
@@ -235,6 +256,7 @@ void _tcls_sub_expr_cmd(TCLS_Commands **cmd,
 TCL_String *_tcls_cmd_get_string(TCLS_Commands **cmd,TCL_String *str,
 		int32_t *strIdx){
 	int32_t start = *strIdx;
+	// ???
 	int32_t ending = _tcls_string_get_length_array(str->data,
 			str->length - start,start,0);
 	int32_t idx = start;
