@@ -125,6 +125,7 @@ TCL_String *tclr_compile_str(TCLR_Context *ctx,int32_t *stack,TCL_String *base){
 			}
 			tcl_string_cp(&outStr,fetch);
 			//free(fetch);
+			strIdx = ofVar;
 			continue;
 		}
 		if(base->data[strIdx] == '$' && state == 1)
@@ -179,7 +180,7 @@ void tclr_step_instruction(TCLR_Context **ctx_ptr){
 	}
 	// TODO
 	if(fnIdx->flags == TCLF_FN_NATIVE){
-		((TCLF_NAT_FN)(fnIdx->natFn))(&ctx,curCmd);
+		((TCLF_NAT_FN)(fnIdx->natFn))(&ctx,execCmd);
 	}
 	ctx->instruction++;
 }

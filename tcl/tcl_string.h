@@ -71,8 +71,8 @@ int32_t _tcls_string_get_length_array(uint8_t str[],int32_t length,int32_t index
 			}
 		}
 		else if(state == 1)state = 0;
-		if(stackIdx < 0)break;
 		ending++;
+		if(stackIdx < 0)break;
 	}
 	if(ending >= length)
 		return -1;
@@ -169,15 +169,22 @@ TCL_String *_tcls_var_mkString(TCL_String *str,TCLS_Commands *tcmd,
 	TCL_String *cc = malloc(sizeof(TCL_String) +
 			sizeof(char) * (ending - *index));
 	cc->capacity = ending - *index;
-	cc->tags = TCL_ST_None;
+	cc->tags = TCL_ST_Variable;
 	cc->refs = 1;
 	cc->length = 0;
 	//TCL_String *cc = tcls_string_from_array(
 	//		str->data,str->length,index);
-	int32_t strIdx;
-	for(strIdx = *index;strIdx < ending;strIdx++){
+	int32_t strIdx = 0;
+	if(str->data[*index] == '"'){
+		// remove " and " from strings
+		strIdx++;
+		ending--;
+	}
+	for(strIdx += *index;strIdx < ending;strIdx++){
 		// TODO TODOOO
 		if(str->data[strIdx] == '['){
+			cc->data[cc->length] = str->data[strIdx];
+			cc->length++;
 			// this is the best part!
 		}
 		if(cc->capacity <= cc->length){
@@ -214,7 +221,7 @@ void _tcls_sub_parse_arguments(TCL_String *str,TCLS_Commands *tcmd,
 		TCL_String *cc;
 		if(str->data[*index] == '{'){
 			cc = _tcls_make_string_from_bound(
-					str->data,*index + 1,ending - 1);
+					str->data,*index + 1,ending);
 		} else{
 			cc = _tcls_var_mkString(str,tcmd,ptr_cmd,index,ending);
 			cmd = *ptr_cmd;
@@ -266,59 +273,41 @@ TCL_String *_tcls_cmd_get_string(TCLS_Commands **cmd,TCL_String *str,
 	//(*strIdx) = *idx;
 
 	if(str->data[start] == '{'){
-		outStr = tcls_string_from_array(str->data,ending - start,&idx);
+		// this is double work!
+		outStr = tcls_string_from_array(str->data,ending,&idx);
 		(*strIdx) = idx;
 		return outStr;
 	}
 	//
 	outStr = malloc(sizeof(TCL_String) + sizeof(char) * (ending - start));
-	int32_t stringOffsets[TCLS_STRING_DEPTH];
-	int32_t stackIdx = 0;
+	char startChar = str->data[*strIdx];
+	if(startChar == '"'){start++;ending--;}
 	int32_t beg;
 	char state = 0;
 	for(idx = start;idx < ending;idx++){
-		if((state & 1) == 0){
-			if(str->data[ending] == '"' && str->data[stringOffsets[stackIdx]] == '"'){
-				stackIdx--;
-			}
-			if(str->data[ending] == ']' && str->data[stringOffsets[stackIdx]] == '['){
-				stackIdx--;
-				if(stackIdx == 0){
-					state &= ~2;
-					// TODO ???
-					beg = stringOffsets[stackIdx + 1] + 1;
-					//extraState = 1;
-					_tcls_sub_expr_cmd(cmd,outStr,&beg);
-				}
-			}
-			if(str->data[ending] == '}' && str->data[stringOffsets[stackIdx]] == '{'){
-				stackIdx--;
-			}
-			if(str->data[ending] == '{'){
-				stringOffsets[stackIdx] = idx;
-				stackIdx++;
-			}
-			// also use preFlags
-			if(str->data[ending] == '['){
-				stringOffsets[stackIdx] = idx;
-				stackIdx++;
-			}
-			if(str->data[ending] == '\\'){
-				state = 1;
-				continue;
-			}
-			// exclude everything in [ ]
-			if((state & 2) == 0){
-				outStr->data[outStr->length] = str->data[ending];
-				outStr->length++;
-				if(str->data[ending] == '[' && stackIdx == 1)
-					state |= 4;
-			}
+		if(state == 0 && startChar == '"' && str->data[ending] == '"'){
+			break;
 		}
-		else if((state & 1) == 1)state &= (~1);
-		if(stackIdx == 0)break;
+		if(state == 0 && str->data[ending] == '['){
+			outStr->data[outStr->length] = '[';
+			outStr->length++;
+			// TODO ???
+			beg = ending;
+			_tcls_sub_expr_cmd(cmd,outStr,&beg);
+			//
+			outStr->data[outStr->length] = ']';
+			outStr->length++;
+		}
+		if(str->data[ending] == '\\'){
+			state ^= 1;
+			continue;
+		}
+		// exclude everything in [ ]
+		if(state == 0 || startChar == '{'){
+			outStr->data[outStr->length] = str->data[ending];
+			outStr->length++;
+		}
 	}
-
 
 
 	return outStr;
