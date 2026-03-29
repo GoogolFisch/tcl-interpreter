@@ -14,26 +14,34 @@ set eFiles ""
 
 proc run-tcl {usingExe run} {
 	puts "Running $run"
-	set output1 [exec tclsh $run]
-	set output2 [exec $usingExe $run]
+	set runOk 0
+	if "[catch {set output1 [exec tclsh $run]} errno]" {
+		puts "error in tclsh!!\n$errno"
+		exit 1
+	}
+	if "[catch {set output2 [exec $usingExe $run]} errno]" {
+		puts "error in $usingExe:\n$errno"
+		set output2 $errno
+		set runOk 1
+	}
 
-	if {$output1 != $output2} {
+	if {"@$output1" == "@$output2"} {
 		puts "Error in $run"
 		puts "<<<<<"
 		puts $output1
 		puts "====="
 		puts $output2
 		puts ">>>>>"
-		return 1
+		set runOk 1
 	}
-	return 0
+	return $runOk
 }
 
 foreach {fl} "$files" {
 	#upvar 0 run-tcl
 	if {[run-tcl $usingExe $fl]} {
 		incr eCount
-		lappend eFiles $fl
+		set eFiles "$eFiles$fl\n"
 	}
 	incr fCount
 }

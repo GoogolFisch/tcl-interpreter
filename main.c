@@ -2,6 +2,7 @@
 #include<stdlib.h>
 #include<stdint.h>
 #include<stdio.h>
+#define TCL_IMPLEMENTATION
 #include"tcl/include.h"
 #include"tcl/tcl_debug.h"
 
