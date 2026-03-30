@@ -18,6 +18,7 @@ void tcl_string_cp(TCL_String **into,TCL_String *from);
 TCL_Slice *tcl_get_slice_of(TCL_SliceArena **sliceArena,
 		TCL_String *string,int32_t start,int32_t end);
 TCL_String *tcl_create_string(int32_t length,char *data);
+TCL_String *tcl_create_cstring(char *data);
 
 // scope stuff
 void tcl_set_into_scope(TCL_Scope **stringScope,
@@ -31,8 +32,8 @@ TCL_Scope *tcl_create_scope(void);
 
 // stringArena
 TCL_StringArena *tcl_create_string_arena(void);
-void TCL_set_string_arena(TCL_StringArena **stringArena,TCL_String *string);
-void TCL_garbage_collect_string_arena(TCL_StringArena **stringArena);
+void tcl_set_string_arena(TCL_StringArena **stringArena,TCL_String *string);
+void tcl_garbage_collect_string_arena(TCL_StringArena **stringArena);
 
 // ========== functions
 size_t tcl_hash_string(TCL_String *string){
@@ -134,6 +135,13 @@ TCL_String *tcl_create_string(int32_t length,char *data){
 
 	return strOut;
 }
+TCL_String *tcl_create_cstring(char *data){
+	TCL_String *strOut = malloc(sizeof(TCL_String) +
+			sizeof(char) * length);
+	int32_t length = 0;
+	while(data[length] != '\0')length++;
+	return tcl_create_string(length,data);
+}
 
 void tcl_set_into_scope(TCL_Scope **stringScope,
 		TCL_String *key,TCL_String *value){
@@ -225,7 +233,7 @@ TCL_StringArena *tcl_create_string_arena(void){
 	arena->capacity = TCL_MIN_CAPACITY;
 	return arena;
 }
-void TCL_set_string_arena(TCL_StringArena **stringArena,TCL_String *string){
+void tcl_set_string_arena(TCL_StringArena **stringArena,TCL_String *string){
 	if((*stringArena)->length >= (*stringArena)->capacity){
 		(*stringArena)->capacity *= 2;
 		*stringArena = realloc(*stringArena,sizeof(TCL_Scope) +
@@ -235,7 +243,7 @@ void TCL_set_string_arena(TCL_StringArena **stringArena,TCL_String *string){
 
 	arena->string[arena->length++] = string;
 }
-void TCL_garbage_collect_string_arena(TCL_StringArena **stringArena){
+void tcl_garbage_collect_string_arena(TCL_StringArena **stringArena){
 	TCL_StringArena *arena = *stringArena;
 	for(int idx = 0;idx < arena->length;idx++){
 		TCL_String *string = arena->string[idx];

@@ -7,7 +7,15 @@
 #include<stdio.h>
 #include"../tcl/include.h"
 
-void load_init(){
-}
+#define insert_natFunction(ctx,string,fn) do{                                  \
+    TCL_String *str = tcl_create_cstring(string);                              \
+    tcl_set_string_arena(&((*ctx)->arena),str);                                \
+    tclf_insert_natFunction(&((*ctx)->fnScope),                                \
+            str,(void(*)())fn);                                                \
+}while(false)
+
+
+void load_init(TCLR_Context **ctx);
+
 
 #endif
