@@ -135,6 +135,6 @@ typedef struct TCLF_Scope TCLF_Scope;
 typedef enum TCLR_FLAGS TCLR_FLAGS;
 typedef struct TCLR_Context TCLR_Context;
 // ======= fn typdef
-typedef void (*TCLF_NAT_FN)(TCLR_Context **ctx,TCLS_Cmd *cmd);
+typedef void (*TCLF_NAT_Fn)(TCLR_Context **ctx,TCLS_Cmd *cmd);
 
 #endif

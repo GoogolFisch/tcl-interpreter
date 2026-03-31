@@ -16,7 +16,7 @@ struct TCLF_KV *tclf_get_function(TCLF_Scope *scope,TCL_String *str){
 	return NULL;
 }
 
-void tclf_insert_natFunction(TCLF_Scope **ptr_scope,TCL_String *str,TCLF_NAT_FN fn){
+void tclf_insert_natFunction(TCLF_Scope **ptr_scope,TCL_String *str,TCLF_NAT_Fn fn){
 	TCLF_Scope *scope = *ptr_scope;
 	if(scope->capacity <= scope->length){
 		scope->capacity *= 2;

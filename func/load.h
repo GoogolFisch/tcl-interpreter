@@ -11,8 +11,8 @@
     TCL_String *str = tcl_create_cstring(string);                              \
     tcl_set_string_arena(&((*ctx)->arena),str);                                \
     tclf_insert_natFunction(&((*ctx)->fnScope),                                \
-            str,(void(*)())fn);                                                \
-}while(false)
+            str,(void(*)())(void*)fn);                                         \
+}while(0)
 
 
 void load_init(TCLR_Context **ctx);

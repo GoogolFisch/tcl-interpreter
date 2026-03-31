@@ -12,6 +12,8 @@ void tcls_insert_command(TCLS_Commands **cmd,TCL_String *str,
 		int32_t *strIdx,TCLS_CMD_FLAGS flags);
 void tcls_insert_command(TCLS_Commands **cmd,TCL_String *str,
 		int32_t *strIdx,TCLS_CMD_FLAGS flags);
+TCLS_Cmd *tcls_cmd_parse(TCLS_Commands **tcmd,TCL_String *str,
+		int32_t *index,int32_t upper);
 TCLS_Commands *tcls_parse_commands(TCL_String *str);
 
 // until where
@@ -353,6 +355,33 @@ void tcls_insert_command(TCLS_Commands **cmd,TCL_String *str,
 	(*cmd)->commands[(*cmd)->length] = icmd;
 	(*cmd)->length++;
 }
+TCLS_Cmd *tcls_cmd_parse(TCLS_Commands **tcmd,TCL_String *str,
+		int32_t *index,int32_t upper){
+	if(str->data[*index] == '\n') (*index)++;
+	while(str->data[*index] == ' ') (*index)++;
+	TCL_String *cmd = tcls_string_from_array(
+			str->data,str->length,index);
+	if(cmd == NULL)break;
+	struct TCLS_Cmd *lowCmd = malloc(sizeof(struct TCLS_Cmd));
+	lowCmd->moreData = NULL;
+	lowCmd->length = 0;
+	lowCmd->capacity = 0;
+	lowCmd->flags = TCLS_CMD_NORMAL;
+	lowCmd->stackDepth = 0;
+	lowCmd->command = cmd;
+	// todo add more!
+	while(*index < str->length && str->data[*index] == ' '){
+		cmdIdx++;
+		_tcls_sub_parse_arguments(str,tcmd,&lowCmd,index);
+		// break on '\n\r;'
+	}
+	if(tcmd->capacity <= tcmd->length){
+		tcmd->capacity *= 2;
+		tcmd = realloc(tcmd,sizeof(TCLS_Commands) +
+			sizeof(struct TCLS_Cmd*) * tcmd->capacity);
+	}
+	return lowCmd;
+}
 
 TCLS_Commands *tcls_parse_commands(TCL_String *str){
 	TCLS_Commands *tcmd = malloc(sizeof(TCLS_Commands) +
@@ -367,26 +396,7 @@ TCLS_Commands *tcls_parse_commands(TCL_String *str){
 	int32_t cmdIdx = 0;
 
 	while(cmdBeginn < str->length){
-		if(str->data[cmdIdx] == '\n') cmdIdx++;
-		TCL_String *cmd = tcls_string_from_array(
-				str->data,str->length,&cmdIdx);
-		if(cmd == NULL)break;
-		struct TCLS_Cmd *lowCmd = malloc(sizeof(struct TCLS_Cmd));
-		lowCmd->moreData = NULL;
-		lowCmd->length = 0;
-		lowCmd->capacity = 0;
-		lowCmd->command = cmd;
-		// todo add more!
-		while(cmdIdx < str->length && str->data[cmdIdx] == ' '){
-			cmdIdx++;
-			_tcls_sub_parse_arguments(str,tcmd,&lowCmd,&cmdIdx);
-			// break on '\n\r;'
-		}
-		if(tcmd->capacity <= tcmd->length){
-			tcmd->capacity *= 2;
-			tcmd = realloc(tcmd,sizeof(TCLS_Commands) +
-				sizeof(struct TCLS_Cmd*) * tcmd->capacity);
-		}
+		TCLS_Cmd *lowCmd = tcls_cmd_parse(&tcmd,str,&cmdIdx,str->length);
 		int32_t cm = tcmd->length++;
 		tcmd->commands[cm] = lowCmd;
 		cmdBeginn = cmdIdx;

@@ -13,8 +13,11 @@ void db_print_cmd(TCLS_Cmd *cmd){
 	printf("Cmd:%i/%i %i %iStack\n",
 			cmd->length,cmd->capacity,
 			(int32_t)cmd->flags,cmd->stackDepth);
+	if(cmd->flags == TCLS_CMD_PUSH) printf("< ");
+	else if(cmd->flags == TCLS_CMD_NORMAL) printf("> ");
+	else printf("| ");
 	TCL_String *str = cmd->command;
-	printf("> String:%i/%i %i -> %.*s\n",
+	printf("String:%i/%i %i -> %.*s\n",
 			str->length,str->capacity,str->tags,
 			str->length,str->data);
 	for(int32_t i = 0;i < cmd->length;i++){
@@ -33,8 +36,11 @@ void db_print_commands(TCLS_Commands *com){
 		printf("  Cmd:%i/%i %i %iStack\n",
 				cmd->length,cmd->capacity,
 				(int32_t)cmd->flags,cmd->stackDepth);
+		if(cmd->flags == TCLS_CMD_PUSH) printf("  < ");
+		else if(cmd->flags == TCLS_CMD_NORMAL) printf("  > ");
+		else printf("  | ");
 		TCL_String *str = cmd->command;
-		printf("  > String:%i/%i %i -> %.*s\n",
+		printf("String:%i/%i %i -> %.*s\n",
 				str->length,str->capacity,str->tags,
 				str->length,str->data);
 		for(int32_t i = 0;i < cmd->length;i++){

@@ -180,7 +180,7 @@ void tclr_step_instruction(TCLR_Context **ctx_ptr){
 	}
 	// TODO
 	if(fnIdx->flags == TCLF_FN_NATIVE){
-		((TCLF_NAT_FN)(fnIdx->natFn))(&ctx,execCmd);
+		((TCLF_NAT_Fn)(fnIdx->natFn))(&ctx,execCmd);
 	}
 	ctx->instruction++;
 }

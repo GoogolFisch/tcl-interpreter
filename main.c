@@ -5,6 +5,8 @@
 #define TCL_IMPLEMENTATION
 #include"tcl/include.h"
 #include"tcl/tcl_debug.h"
+#define FN_REDEF_INIT
+#include"func/core.c"
 
 // bla bla bla bla
 
@@ -60,26 +62,31 @@ void setFn(TCLR_Context **ctx,TCLS_Cmd *cmd){
   var->data[__var_o] = msg[__var_o];                                           \
  }
 
-int32_t make_and_run(int32_t length,char *fData){
+TCLR_Context *make_ctx(int32_t length,char *fData){
 	// TODO
 	TCLF_Scope *fnScope = tclf_make_function_scope();
-	//
+	/* /
 	makeStr(testFunc,"puts");
 	tclf_insert_natFunction(&fnScope,testFunc,(void(*)())testFn);
 	makeStr(setFunc,"set");
 	tclf_insert_natFunction(&fnScope,setFunc,(void(*)())setFn);
-	//
+	//  */
 	TCL_StringArena *ar = tcl_create_string_arena();
 	TCL_String *str = tcl_create_string(length,fData);
 	TCLS_Commands *tcmd = tcls_parse_commands(str);
 	TCLR_Context *ctx = tclr_make_context(NULL,TCLR_FULL_LAYER);
-	ctx->fnScope = fnScope;
 	ctx->program = tcmd;
 	ctx->arena = ar;
+	ctx->fnScope = fnScope;
+#ifdef FN_REDEF_INIT
+	fn_load_core_init(&ctx);
+#endif
+	return ctx;
+}
+void run_ctx(TCLR_Context *ctx){
 	while(ctx != NULL){
 		tclr_step_instruction(&ctx);
 	}
-	return 0;
 }
 
 int32_t main(int32_t argc,char **argv,char **env){
@@ -108,9 +115,10 @@ int32_t main(int32_t argc,char **argv,char **env){
 	fileData[length] = 0;
 	fileData[length + 1] = 0;
 	fread(fileData,length,sizeof(char),fptr);
+	fclose(fptr);
 	
 	//printf("File: %s\n%s\n",fileName,fileData);
-	make_and_run(length,fileData);
+	TCLR_Context *ctx = make_ctx(length,fileData);
+	run_ctx(ctx);
 
-	fclose(fptr);
 }

@@ -136,8 +136,6 @@ TCL_String *tcl_create_string(int32_t length,char *data){
 	return strOut;
 }
 TCL_String *tcl_create_cstring(char *data){
-	TCL_String *strOut = malloc(sizeof(TCL_String) +
-			sizeof(char) * length);
 	int32_t length = 0;
 	while(data[length] != '\0')length++;
 	return tcl_create_string(length,data);
