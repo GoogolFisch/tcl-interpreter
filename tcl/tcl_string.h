@@ -13,13 +13,13 @@ void tcls_insert_command(TCLS_Commands **cmd,TCL_String *str,
 void tcls_insert_command(TCLS_Commands **cmd,TCL_String *str,
 		int32_t *strIdx,TCLS_CMD_FLAGS flags);
 TCLS_Cmd *tcls_cmd_parse(TCLS_Commands **tcmd,TCL_String *str,
-		int32_t *index,int32_t upper);
+		int32_t *index,int32_t upper,int32_t stackOffset);
 TCLS_Commands *tcls_parse_commands(TCL_String *str);
 
 // until where
 static int32_t _tcls_string_length_square(uint8_t str[],int32_t length,int32_t index);
 //
-static int32_t _tcls_string_length_word(uint8_t str[],int32_t length,int32_t index){
+static int32_t _tcls_string_length_word(uint8_t str[],int32_t length,int32_t index,char brk){
 	// from " this untill this "
 	int32_t ending = index;
 	char state = 0;
@@ -33,6 +33,7 @@ static int32_t _tcls_string_length_word(uint8_t str[],int32_t length,int32_t ind
 			if(str[ending] == '\n') break;
 			if(str[ending] == ' ') break;
 			if(str[ending] == ';') break;
+			if(str[ending] == brk) break;
 			if(str[ending] == '\\') state = 1;
 		}
 		else{
@@ -40,7 +41,7 @@ static int32_t _tcls_string_length_word(uint8_t str[],int32_t length,int32_t ind
 		}
 		ending++;
 	}
-	if(ending >= length)
+	if(ending > length)
 		return -1;
 	return ending;
 }
@@ -61,7 +62,7 @@ static int32_t _tcls_string_length_quote(uint8_t str[],int32_t length,int32_t in
 		else state = 0;
 		ending++;
 	}
-	if(ending >= length)
+	if(ending > length)
 		return -1;
 	return ending;
 }
@@ -86,7 +87,7 @@ static int32_t _tcls_string_length_curly(uint8_t str[],int32_t length,int32_t in
 		ending++;
 		if(stackIdx < 0)break;
 	}
-	if(ending >= length)
+	if(ending > length)
 		return -1;
 	return ending;
 }
@@ -107,15 +108,16 @@ static int32_t _tcls_string_length_square(uint8_t str[],int32_t length,int32_t i
 				ending = _tcls_string_length_curly(str,length,ending);
 			else if(str[ending] == '"')
 				ending = _tcls_string_length_quote(str,length,ending);
-			ending = _tcls_string_length_word(str,length,ending);
+			else
+				ending = _tcls_string_length_word(str,length,ending,']');
 			/* if(str[ending] == '\\')
 				state = 1;
 			// */
 		}
 		else if(state == 1)state = 0;
-		ending++;
+		//ending++;
 	}
-	if(ending >= length)
+	if(ending > length)
 		return -1;
 	return ending;
 }
@@ -127,7 +129,7 @@ static int32_t _tcls_string_get_length_array(uint8_t str[],int32_t length,int32_
 	if(str[index] == '{')return _tcls_string_length_curly(str,length,index);
 	if(str[index] == '"')return _tcls_string_length_quote(str,length,index);
 	if(str[index] != '"' && str[index] != '{' && str[index] != '['){
-		return _tcls_string_length_word(str,length,index);
+		return _tcls_string_length_word(str,length,index,';');
 	}
 	// multi layered string
 	return -1;
@@ -215,8 +217,9 @@ TCL_String *tcls_string_from_array(uint8_t *str,int32_t length,int32_t *index){
 	return strOut;
 }
 
-static TCL_String *_tcls_var_mkString(TCL_String *str,TCLS_Commands *tcmd,
-		struct TCLS_Cmd **ptr_cmd,int32_t *index,int32_t ending){
+static TCL_String *_tcls_var_mkString(TCL_String *str,TCLS_Commands **tcmd,
+		struct TCLS_Cmd **ptr_cmd,int32_t *index,
+		int32_t ending,int32_t *cStack){
 	tcmd = tcmd;
 	ptr_cmd = ptr_cmd;
 	//
@@ -239,6 +242,25 @@ static TCL_String *_tcls_var_mkString(TCL_String *str,TCLS_Commands *tcmd,
 		if(str->data[strIdx] == '['){
 			cc->data[cc->length] = str->data[strIdx];
 			cc->length++;
+			int32_t lower = strIdx + 1;
+			int32_t upper = _tcls_string_length_square(
+					str->data,str->length,strIdx) - 1;
+			(*cStack)++;
+			TCLS_Cmd *cmd = NULL;
+			while(lower < upper){
+				TCLS_Cmd *lowCmd = tcls_cmd_parse(
+						tcmd,str,&lower,upper,*cStack);
+				if(lowCmd == NULL)break;
+				cmd = lowCmd;
+			}
+			if(cmd != NULL){
+				cmd->flags = TCLS_CMD_PUSH;
+			}
+			// todo
+			lower = lower;
+			strIdx = upper + 1;
+			cc->data[cc->length] = str->data[strIdx - 1];
+			cc->length++;
 			// this is the best part!
 			continue;
 		}
@@ -254,12 +276,12 @@ static TCL_String *_tcls_var_mkString(TCL_String *str,TCLS_Commands *tcmd,
 }
 
 
-static void _tcls_sub_parse_arguments(TCL_String *str,TCLS_Commands *tcmd,
-		struct TCLS_Cmd **ptr_cmd,int32_t *index){
+static void _tcls_sub_parse_arguments(TCL_String *str,TCLS_Commands **tcmd,
+		struct TCLS_Cmd **ptr_cmd,int32_t *index,int32_t upper,int32_t *cStack){
 	struct TCLS_Cmd *cmd = *ptr_cmd;
 	tcmd = tcmd;
 	// TODO: also add variable concat stuff!
-	while(*index < str->length){
+	while(*index < upper){
 		// break
 		while(str->data[*index] == ' ')
 			(*index)++;
@@ -271,14 +293,14 @@ static void _tcls_sub_parse_arguments(TCL_String *str,TCLS_Commands *tcmd,
 			break;
 		//
 		int32_t ending = _tcls_string_get_length_array(
-				str->data,str->length,*index,0);
+				str->data,upper,*index,0);
 		if(ending < 0)break;
 		TCL_String *cc;
 		if(str->data[*index] == '{'){
 			cc = _tcls_make_string_from_bound(
 					str->data,*index + 1,ending - 1);
 		} else{
-			cc = _tcls_var_mkString(str,tcmd,ptr_cmd,index,ending);
+			cc = _tcls_var_mkString(str,tcmd,ptr_cmd,index,ending,cStack);
 			cmd = *ptr_cmd;
 		}
 		*index = ending;
@@ -409,7 +431,7 @@ void tcls_insert_command(TCLS_Commands **cmd,TCL_String *str,
 	(*cmd)->length++;
 }
 TCLS_Cmd *tcls_cmd_parse(TCLS_Commands **tcmd,TCL_String *str,
-		int32_t *index,int32_t upper){
+		int32_t *index,int32_t upper,int32_t stackOffset){
 	for(;*index < str->length;(*index)++){
 		if(str->data[*index] == ' ')continue;
 		if(str->data[*index] == '\n')continue;
@@ -418,21 +440,28 @@ TCLS_Cmd *tcls_cmd_parse(TCLS_Commands **tcmd,TCL_String *str,
 		break;
 	}
 	TCL_String *cmd = tcls_string_from_array(
-			str->data,str->length,index);
+			str->data,str->length,index);//,&stackOffset);
 	if(cmd == NULL)return NULL;
 	struct TCLS_Cmd *lowCmd = malloc(sizeof(struct TCLS_Cmd));
 	lowCmd->moreData = NULL;
 	lowCmd->length = 0;
 	lowCmd->capacity = 0;
 	lowCmd->flags = TCLS_CMD_NORMAL;
-	lowCmd->stackDepth = 0;
+	lowCmd->stackDepth = stackOffset;
 	lowCmd->command = cmd;
 	// todo add more!
 	while(*index < upper && str->data[*index] == ' '){
 		(*index)++;
-		_tcls_sub_parse_arguments(str,*tcmd,&lowCmd,index);
+		_tcls_sub_parse_arguments(str,tcmd,&lowCmd,index,upper,&stackOffset);
 		// break on '\n\r;'
 	}
+	if((*tcmd)->capacity <= (*tcmd)->length){
+		(*tcmd)->capacity *= 2;
+		(*tcmd) = realloc((*tcmd),sizeof(TCLS_Commands) +
+			sizeof(struct TCLS_Cmd*) * (*tcmd)->capacity);
+	}
+	int32_t cm = (*tcmd)->length++;
+	(*tcmd)->commands[cm] = lowCmd;
 	return lowCmd;
 }
 
@@ -449,15 +478,8 @@ TCLS_Commands *tcls_parse_commands(TCL_String *str){
 	int32_t cmdIdx = 0;
 
 	while(cmdBeginn < str->length){
-		TCLS_Cmd *lowCmd = tcls_cmd_parse(&tcmd,str,&cmdIdx,str->length);
+		TCLS_Cmd *lowCmd = tcls_cmd_parse(&tcmd,str,&cmdIdx,str->length,0);
 		if(lowCmd == NULL)break;
-		if(tcmd->capacity <= tcmd->length){
-			tcmd->capacity *= 2;
-			tcmd = realloc(tcmd,sizeof(TCLS_Commands) +
-				sizeof(struct TCLS_Cmd*) * tcmd->capacity);
-		}
-		int32_t cm = tcmd->length++;
-		tcmd->commands[cm] = lowCmd;
 		cmdBeginn = cmdIdx;
 	}
 
