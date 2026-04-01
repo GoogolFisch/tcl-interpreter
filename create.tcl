@@ -2,11 +2,13 @@
 
 puts [pwd]
 set CC "gcc"
-set debug "-ggdb -Wall -Wextra -fsanitize=address"
+set warnings "-Wall -Wextra -Wno-missing-field-initializers"
+set sanitizer "-fsanitize=address,undefined"
+set debug "-ggdb -Og"
 set build "build"
 
 file mkdir "./$build/"
-if { [catch "exec $CC $debug ./main.c -o ./$build/tcl.out" fid] } {
+if { [catch "exec $CC $debug $warnings $sanitizer ./main.c -o ./$build/tcl.out" fid] } {
 	set comb ""
 	set cnt 30
 	foreach {pt} [split $fid "\n"] {

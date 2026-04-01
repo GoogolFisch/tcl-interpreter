@@ -17,60 +17,72 @@ TCLS_Cmd *tcls_cmd_parse(TCLS_Commands **tcmd,TCL_String *str,
 TCLS_Commands *tcls_parse_commands(TCL_String *str);
 
 // until where
-int32_t _tcls_string_get_length_array(uint8_t str[],int32_t length,int32_t index,
-		int32_t preFlags){
-	preFlags ^= preFlags;
-	if(length <= index)return -1;
-	int32_t stringOffsets[TCLS_STRING_DEPTH];
-	int32_t stackIdx = 0 + preFlags;
+static int32_t _tcls_string_length_square(uint8_t str[],int32_t length,int32_t index);
+//
+static int32_t _tcls_string_length_word(uint8_t str[],int32_t length,int32_t index){
+	// from " this untill this "
+	int32_t ending = index;
+	char state = 0;
+	ending++;
+	while(ending < length){
+		if(state == 0){
+			if(str[ending] == '[')
+				ending = _tcls_string_length_square(str,length,ending);
+			if(str[ending] == '\t') break;
+			if(str[ending] == '\r') break;
+			if(str[ending] == '\n') break;
+			if(str[ending] == ' ') break;
+			if(str[ending] == ';') break;
+			if(str[ending] == '\\') state = 1;
+		}
+		else{
+			state = 0;
+		}
+		ending++;
+	}
+	if(ending >= length)
+		return -1;
+	return ending;
+}
+static int32_t _tcls_string_length_quote(uint8_t str[],int32_t length,int32_t index){
+	// from " this untill this "
+	int32_t ending = index;
+	char state = 0;
+	if(str[index] != '"')return ending;
+	ending++;
+	while(ending < length){
+		if(state == 0){
+			if(str[ending] == '\t') break;
+			if(str[ending] == '\r') break;
+			if(str[ending] == '\n') break;
+			if(str[ending] == ' ') break;
+			if(str[ending] == ';') break;
+			if(str[ending] == '\\') state = 1;
+		}
+		else
+			state = 0;
+		ending++;
+	}
+	if(ending >= length)
+		return -1;
+	return ending;
+}
+static int32_t _tcls_string_length_curly(uint8_t str[],int32_t length,int32_t index){
+	int32_t stackIdx = 0;
 	//int32_t beginning = index;
 	int32_t ending = index;
 	char state = 0;
-	if(str[index] != '"' && str[index] != '{' && str[index] != '['){
-		// literal string (top layer)
-		while(ending < length){
-			if(state == 0){
-				if(str[ending] == '\t') break;
-				if(str[ending] == '\r') break;
-				if(str[ending] == '\n') break;
-				if(str[ending] == ' ') break;
-				if(str[ending] == ';') break;
-				if(str[ending] == '\\') state = 1;
-			}
-			else{
-				state = 0;
-			}
-			ending++;
-		}
-		return ending;
-	}
-	// multi layered string
-	stringOffsets[stackIdx] = index;
+	if(str[index] != '{')return ending;
 	ending++;
 	while(ending < length){
 		if(state == 0){
 			// MARK
-			if(str[ending] == '"' && str[stringOffsets[stackIdx]] == '"'){
+			if(str[ending] == '}')
 				stackIdx--;
-			}
-			if(str[ending] == ']' && str[stringOffsets[stackIdx]] == '['){
-				stackIdx--;
-			}
-			if(str[ending] == '}' && str[stringOffsets[stackIdx]] == '{'){
-				stackIdx--;
-			}
-			if(str[ending] == '{'){
-				stringOffsets[stackIdx] = index;
+			if(str[ending] == '{')
 				stackIdx++;
-			}
-			// also use preFlags
-			if(str[ending] == '[' && str[stringOffsets[0]] == '"'){
-				stringOffsets[stackIdx] = index;
-				stackIdx++;
-			}
-			if(str[ending] == '\\'){
+			if(str[ending] == '\\')
 				state = 1;
-			}
 		}
 		else if(state == 1)state = 0;
 		ending++;
@@ -80,8 +92,48 @@ int32_t _tcls_string_get_length_array(uint8_t str[],int32_t length,int32_t index
 		return -1;
 	return ending;
 }
+static int32_t _tcls_string_length_square(uint8_t str[],int32_t length,int32_t index){
+	int32_t stackIdx = 0;
+	//int32_t beginning = index;
+	int32_t ending = index;
+	char state = 0;
+	if(str[index] != '[')return ending;
+	ending++;
+	while(ending < length){
+		if(state == 0){
+			// MARK
+			if(str[ending] == ']')
+				break;
+			if(str[ending] == '{')
+				ending = _tcls_string_length_curly(str,length,ending);
+			if(str[ending] == '"')
+				ending = _tcls_string_length_quote(str,length,ending);
+			if(str[ending] == '\\')
+				state = 1;
+		}
+		else if(state == 1)state = 0;
+		ending++;
+		if(stackIdx < 0)break;
+	}
+	if(ending >= length)
+		return -1;
+	return ending;
+}
+static int32_t _tcls_string_get_length_array(uint8_t str[],int32_t length,int32_t index,
+		int32_t preFlags){
+	preFlags = preFlags;
+	if(length <= index)return -1;
+	if(str[index] == '[')return _tcls_string_length_square(str,length,index);
+	if(str[index] == '{')return _tcls_string_length_curly(str,length,index);
+	if(str[index] == '"')return _tcls_string_length_quote(str,length,index);
+	if(str[index] != '"' && str[index] != '{' && str[index] != '['){
+		return _tcls_string_length_word(str,length,index);
+	}
+	// multi layered string
+	return -1;
+}
 
-TCL_String *_tcls_make_string_from_bound(uint8_t str[],int32_t lower,int32_t upper){
+static TCL_String *_tcls_make_string_from_bound(uint8_t str[],int32_t lower,int32_t upper){
 	if(upper < lower)
 		*(size_t**)NULL = NULL;
 	TCL_String *strOut = malloc(sizeof(TCL_String) +
@@ -163,7 +215,7 @@ TCL_String *tcls_string_from_array(uint8_t *str,int32_t length,int32_t *index){
 	return strOut;
 }
 
-TCL_String *_tcls_var_mkString(TCL_String *str,TCLS_Commands *tcmd,
+static TCL_String *_tcls_var_mkString(TCL_String *str,TCLS_Commands *tcmd,
 		struct TCLS_Cmd **ptr_cmd,int32_t *index,int32_t ending){
 	tcmd = tcmd;
 	ptr_cmd = ptr_cmd;
@@ -201,7 +253,7 @@ TCL_String *_tcls_var_mkString(TCL_String *str,TCLS_Commands *tcmd,
 }
 
 
-void _tcls_sub_parse_arguments(TCL_String *str,TCLS_Commands *tcmd,
+static void _tcls_sub_parse_arguments(TCL_String *str,TCLS_Commands *tcmd,
 		struct TCLS_Cmd **ptr_cmd,int32_t *index){
 	struct TCLS_Cmd *cmd = *ptr_cmd;
 	tcmd = tcmd;
@@ -244,7 +296,7 @@ void _tcls_sub_parse_arguments(TCL_String *str,TCLS_Commands *tcmd,
 	}
 }
 
-void _tcls_sub_expr_cmd(TCLS_Commands **cmd,
+static void _tcls_sub_expr_cmd(TCLS_Commands **cmd,
 		TCL_String *outStr,int32_t *strIdx){
 	//char extraState;
 	int32_t beg;
@@ -262,7 +314,7 @@ void _tcls_sub_expr_cmd(TCLS_Commands **cmd,
 	}
 }
 
-TCL_String *_tcls_cmd_get_string(TCLS_Commands **cmd,TCL_String *str,
+static TCL_String *_tcls_cmd_get_string(TCLS_Commands **cmd,TCL_String *str,
 		int32_t *strIdx){
 	int32_t start = *strIdx;
 	// ???
@@ -357,8 +409,13 @@ void tcls_insert_command(TCLS_Commands **cmd,TCL_String *str,
 }
 TCLS_Cmd *tcls_cmd_parse(TCLS_Commands **tcmd,TCL_String *str,
 		int32_t *index,int32_t upper){
-	if(str->data[*index] == '\n') (*index)++;
-	while(str->data[*index] == ' ') (*index)++;
+	for(;*index < str->length;(*index)++){
+		if(str->data[*index] == ' ')continue;
+		if(str->data[*index] == '\n')continue;
+		if(str->data[*index] == '\r')continue;
+		if(str->data[*index] == '\t')continue;
+		break;
+	}
 	TCL_String *cmd = tcls_string_from_array(
 			str->data,str->length,index);
 	if(cmd == NULL)return NULL;

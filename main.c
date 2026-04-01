@@ -114,8 +114,12 @@ int32_t main(int32_t argc,char **argv,char **env){
 	char *fileData = malloc(sizeof(char) * (length + 3));
 	fileData[length] = 0;
 	fileData[length + 1] = 0;
-	fread(fileData,length,sizeof(char),fptr);
+	int32_t newLength = fread(fileData,length,sizeof(char),fptr);
 	fclose(fptr);
+	if(newLength != length){
+		printf("Error with reading file!\n");
+		return 1;
+	}
 	
 	//printf("File: %s\n%s\n",fileName,fileData);
 	TCLR_Context *ctx = make_ctx(length,fileData);
