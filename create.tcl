@@ -4,7 +4,7 @@ puts [pwd]
 set CC "gcc"
 set warnings "-Wall -Wextra -Wno-missing-field-initializers"
 set sanitizer "-fsanitize=address,undefined"
-set debug "-ggdb -Og"
+set debug "-ggdb" ;# -Og"
 set build "build"
 
 file mkdir "./$build/"

@@ -10,6 +10,8 @@
 
 // bla bla bla bla
 
+char g_ShowAst = 0;
+
 int32_t print_help(int32_t argc,char **argv,char **env){
 	printf("Usage of %s\n",argv[0]);
 	printf("Arg count:%i\n",argc);
@@ -30,6 +32,7 @@ int32_t print_error(int32_t argc,char **argv,char **env){
 	return 0;
 }
 int32_t set_variable(int32_t argc,char **argv,char **env){
+	if(argv[0][1] == 'a')g_ShowAst = 1;
 	argc = argc;
 	argv = argv;
 	env = env;
@@ -114,15 +117,18 @@ int32_t main(int32_t argc,char **argv,char **env){
 	char *fileData = malloc(sizeof(char) * (length + 3));
 	fileData[length] = 0;
 	fileData[length + 1] = 0;
-	int32_t newLength = fread(fileData,length,sizeof(char),fptr);
+	int32_t newLength = fread(fileData,sizeof(char),length,fptr);
 	fclose(fptr);
 	if(newLength != length){
-		printf("Error with reading file!\n");
+		printf("Error with reading file!\nExpecting %i but got %i\n",length,newLength);
 		return 1;
 	}
 	
 	//printf("File: %s\n%s\n",fileName,fileData);
 	TCLR_Context *ctx = make_ctx(length,fileData);
-	run_ctx(ctx);
+	if(!g_ShowAst)
+		run_ctx(ctx);
+	else
+		db_print_commands(ctx->program);
 
 }

@@ -52,15 +52,13 @@ static int32_t _tcls_string_length_quote(uint8_t str[],int32_t length,int32_t in
 	ending++;
 	while(ending < length){
 		if(state == 0){
-			if(str[ending] == '\t') break;
-			if(str[ending] == '\r') break;
-			if(str[ending] == '\n') break;
-			if(str[ending] == ' ') break;
-			if(str[ending] == ';') break;
+			if(str[ending] == '"'){
+				ending++;
+				break;
+			}
 			if(str[ending] == '\\') state = 1;
 		}
-		else
-			state = 0;
+		else state = 0;
 		ending++;
 	}
 	if(ending >= length)
@@ -93,7 +91,6 @@ static int32_t _tcls_string_length_curly(uint8_t str[],int32_t length,int32_t in
 	return ending;
 }
 static int32_t _tcls_string_length_square(uint8_t str[],int32_t length,int32_t index){
-	int32_t stackIdx = 0;
 	//int32_t beginning = index;
 	int32_t ending = index;
 	char state = 0;
@@ -102,18 +99,21 @@ static int32_t _tcls_string_length_square(uint8_t str[],int32_t length,int32_t i
 	while(ending < length){
 		if(state == 0){
 			// MARK
-			if(str[ending] == ']')
+			if(str[ending] == ']'){
+				ending++;
 				break;
+			}
 			if(str[ending] == '{')
 				ending = _tcls_string_length_curly(str,length,ending);
-			if(str[ending] == '"')
+			else if(str[ending] == '"')
 				ending = _tcls_string_length_quote(str,length,ending);
-			if(str[ending] == '\\')
+			ending = _tcls_string_length_word(str,length,ending);
+			/* if(str[ending] == '\\')
 				state = 1;
+			// */
 		}
 		else if(state == 1)state = 0;
 		ending++;
-		if(stackIdx < 0)break;
 	}
 	if(ending >= length)
 		return -1;
@@ -240,6 +240,7 @@ static TCL_String *_tcls_var_mkString(TCL_String *str,TCLS_Commands *tcmd,
 			cc->data[cc->length] = str->data[strIdx];
 			cc->length++;
 			// this is the best part!
+			continue;
 		}
 		if(cc->capacity <= cc->length){
 			cc->capacity *= 2;
@@ -275,7 +276,7 @@ static void _tcls_sub_parse_arguments(TCL_String *str,TCLS_Commands *tcmd,
 		TCL_String *cc;
 		if(str->data[*index] == '{'){
 			cc = _tcls_make_string_from_bound(
-					str->data,*index + 1,ending);
+					str->data,*index + 1,ending - 1);
 		} else{
 			cc = _tcls_var_mkString(str,tcmd,ptr_cmd,index,ending);
 			cmd = *ptr_cmd;

@@ -5,6 +5,7 @@
 #include"tcl_struct.h"
 #include"tcl_type.h"
 #include"tcl_string.h"
+#include"tcl_debug.h"
 
 
 TCLR_Context *tclr_make_context(TCLR_Context *ctx,TCLR_FLAGS flag){
@@ -162,6 +163,8 @@ void tclr_step_instruction(TCLR_Context **ctx_ptr){
 	if(fnIdx == NULL){
 		printf("Not finding %.*s function.\n"
 				,curCmd->command->length,curCmd->command->data);
+		db_print_cmd(curCmd);
+
 		ctx->instruction++;
 		// TODO if fnIdx->flags == TCLF_FN_PUSH
 		return;
