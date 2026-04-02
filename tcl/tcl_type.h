@@ -245,6 +245,9 @@ void tcl_garbage_collect_string_arena(TCL_StringArena **stringArena){
 	TCL_StringArena *arena = *stringArena;
 	for(int idx = 0;idx < arena->length;idx++){
 		TCL_String *string = arena->string[idx];
+		if(string->refs < 0){
+			*(int32_t*)NULL = 0;
+		}
 		if(string->refs)continue;
 		arena->string[idx] = arena->string[arena->length - 1];
 		arena->length--;

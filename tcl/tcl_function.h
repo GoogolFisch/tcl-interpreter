@@ -25,6 +25,7 @@ void tclf_insert_natFunction(TCLF_Scope **ptr_scope,TCL_String *str,TCLF_NAT_Fn 
 		scope = *ptr_scope;
 	}
 	size_t hash = tcl_hash_string(str);
+	str->refs++;
 	scope->kv[scope->length].kHash = hash;
 	scope->kv[scope->length].key = str;
 	scope->kv[scope->length].cmds = NULL;
@@ -40,6 +41,18 @@ TCLF_Scope *tclf_make_function_scope(){
 	fnScope->capacity = TCL_MIN_CAPACITY;
 
 	return fnScope;
+}
+void tclf_free_function_scope(TCLF_Scope **fns){
+	TCLF_Scope *fnScope = *fns;
+	for(int32_t fidx = 0;fidx < fnScope->length;fidx++){
+		struct TCLF_KV *fkv = &(fnScope->kv[fidx]);
+		fkv->key->refs--;
+		if(fkv->cmds != NULL)
+			tcls_free_commands(&(fkv->cmds));
+	}
+
+
+	free(*fns);
 }
 
 #endif

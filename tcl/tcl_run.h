@@ -30,13 +30,18 @@ TCLR_Context *tclr_make_context(TCLR_Context *ctx,TCLR_FLAGS flag){
 	return cOut;
 }
 void tclr_free_context(TCLR_Context *ctx){
-	if(ctx->parent == NULL){
-		// TODO
-	}
+	tcl_drop_scope(&(ctx->scope));
+	tcls_free_commands(&(ctx->program));
 	/* / ?????
 	for(int i = 0;i < ctx->parseStackIdx;i++){
 		free(ctx->parseStack[i]);
 	} //  */
+	if(ctx->parent == NULL){
+		tclf_free_function_scope(&(ctx->fnScope));
+		tcl_garbage_collect_string_arena(&(ctx->arena));
+		free(ctx->arena);
+		// TODO
+	}
 	free(ctx);
 }
 TCL_String *tclr_get_bracketStr(TCL_String *str,int32_t *index){

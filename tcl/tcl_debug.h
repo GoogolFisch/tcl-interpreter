@@ -51,5 +51,14 @@ void db_print_commands(TCLS_Commands *com){
 		}
 	}
 }
+void db_print_stringArena(TCL_StringArena *arena){
+	printf("Arena: %i/%i\n",arena->length,arena->capacity);
+	for(int32_t i = 0;i < arena->length;i++){
+		TCL_String *str = arena->string[i];
+		printf("String:%i/%i %i #%i -> %.*s\n",
+				str->length,str->capacity,str->tags,str->refs,
+				str->length,str->data);
+	}
+}
 
 #endif

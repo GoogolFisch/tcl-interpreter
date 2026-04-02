@@ -6,7 +6,9 @@ if {![file exists $usingExe]} {
 	#error
 	exit 1
 }
-set files [glob test/*]
+set files ""
+catch {set files "$files [glob test/*]"} errno
+catch {set files "$files [glob hide/*]"} errno
 set fCount 0
 set eCount 0
 set eFiles ""

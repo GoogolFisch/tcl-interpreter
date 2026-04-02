@@ -76,7 +76,7 @@ TCLR_Context *make_ctx(int32_t length,char *fData){
 	//  */
 	TCL_StringArena *ar = tcl_create_string_arena();
 	TCL_String *str = tcl_create_string(length,fData);
-	TCLS_Commands *tcmd = tcls_parse_commands(str);
+	TCLS_Commands *tcmd = tcls_parse_commands(&ar,str);
 	TCLR_Context *ctx = tclr_make_context(NULL,TCLR_FULL_LAYER);
 	ctx->program = tcmd;
 	ctx->arena = ar;
@@ -84,11 +84,20 @@ TCLR_Context *make_ctx(int32_t length,char *fData){
 #ifdef FN_REDEF_INIT
 	fn_load_core_init(&ctx);
 #endif
+	free(str);
 	return ctx;
 }
 void run_ctx(TCLR_Context *ctx){
 	while(ctx != NULL){
 		tclr_step_instruction(&ctx);
+	}
+}
+void free_ctx(TCLR_Context *ctx){
+	TCLR_Context *low_ctx;
+	while(ctx != NULL){
+		low_ctx = ctx->parent;
+		tclr_free_context(ctx);
+		ctx = low_ctx;
 	}
 }
 
@@ -130,5 +139,10 @@ int32_t main(int32_t argc,char **argv,char **env){
 		run_ctx(ctx);
 	else
 		db_print_commands(ctx->program);
+
+
+	free_ctx(ctx);
+	free(fileData);
+	//tcl_garbage_collect_string_arena(&(ctx->arena));
 
 }
