@@ -16,6 +16,7 @@ TCLS_Cmd *tcls_cmd_parse(TCL_StringArena **stringArena,
 		TCLS_Commands **tcmd,TCL_String *str,
 		int32_t *index,int32_t upper,int32_t stackOffset);
 TCLS_Commands *tcls_parse_commands(TCL_StringArena **stringArena,TCL_String *str);
+void tcls_free_cmd(TCLS_Cmd **cmd);
 void tcls_free_commands(TCLS_Commands **tcmd);
 
 // until where
@@ -497,6 +498,14 @@ TCLS_Commands *tcls_parse_commands(TCL_StringArena **stringArena,TCL_String *str
 	}
 
 	return tcmd;
+}
+void tcls_free_cmd(TCLS_Cmd **cmd){
+	TCLS_Cmd *c = *cmd;
+	c->command->refs--;
+	for(int32_t subIdx = 0;subIdx < c->length;subIdx++){
+		c->arguments[subIdx]->refs--;
+	}
+	free(c);
 }
 
 void tcls_free_commands(TCLS_Commands **tcmd){

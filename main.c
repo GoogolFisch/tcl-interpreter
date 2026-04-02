@@ -87,9 +87,9 @@ TCLR_Context *make_ctx(int32_t length,char *fData){
 	free(str);
 	return ctx;
 }
-void run_ctx(TCLR_Context *ctx){
-	while(ctx != NULL){
-		tclr_step_instruction(&ctx);
+void run_ctx(TCLR_Context **ctx){
+	while(*ctx != NULL){
+		tclr_step_instruction(ctx);
 	}
 }
 void free_ctx(TCLR_Context *ctx){
@@ -136,7 +136,7 @@ int32_t main(int32_t argc,char **argv,char **env){
 	//printf("File: %s\n%s\n",fileName,fileData);
 	TCLR_Context *ctx = make_ctx(length,fileData);
 	if(!g_ShowAst)
-		run_ctx(ctx);
+		run_ctx(&ctx);
 	else
 		db_print_commands(ctx->program);
 

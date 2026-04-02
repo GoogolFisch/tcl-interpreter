@@ -163,6 +163,8 @@ void tclr_step_instruction(TCLR_Context **ctx_ptr){
 
 	int32_t stOff = execCmd->stackDepth;
 	execCmd->command = tclr_compile_str(ctx,&stOff,curCmd->command);
+	execCmd->command->refs++;
+	tcl_set_string_arena(&(ctx->arena),execCmd->command);
 	ctx->parseStackIdx -= execCmd->stackDepth;
 	struct TCLF_KV *fnIdx = tclf_get_function(ctx->fnScope,execCmd->command);
 	if(fnIdx == NULL){
@@ -171,6 +173,7 @@ void tclr_step_instruction(TCLR_Context **ctx_ptr){
 		db_print_cmd(curCmd);
 
 		ctx->instruction++;
+		free(execCmd); /// 
 		// TODO if fnIdx->flags == TCLF_FN_PUSH
 		return;
 	}
@@ -178,18 +181,22 @@ void tclr_step_instruction(TCLR_Context **ctx_ptr){
 	if(fnIdx->flags & TCLF_FN_RAW){
 		for(int32_t i = 0;i < curCmd->length;i++){
 			execCmd->arguments[i] = curCmd->arguments[i];
+			execCmd->arguments[i]->refs++;
 		}
 	}
 	else{
 		for(int32_t i = 0;i < curCmd->length;i++){
 			execCmd->arguments[i] = tclr_compile_str(
 					ctx,&stOff,curCmd->arguments[i]);
+			execCmd->arguments[i]->refs++;
+			tcl_set_string_arena(&(ctx->arena),execCmd->arguments[i]);
 		}
 	}
 	// TODO
 	if(fnIdx->flags == TCLF_FN_NATIVE){
 		((TCLF_NAT_Fn)(fnIdx->natFn))(&ctx,execCmd);
 	}
+	tcls_free_cmd(&execCmd);
 	ctx->instruction++;
 }
 
