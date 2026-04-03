@@ -11,7 +11,7 @@
     TCL_String *str = tcl_create_cstring(string);                              \
     tcl_set_string_arena(&((*ctx)->arena),str);                                \
     tclf_insert_natFunction(&((*ctx)->fnScope),                                \
-            str,(void(*)())(void*)fn);                                         \
+            str,(TCLF_NAT_Fn)(void*)fn);                                       \
 }while(0)
 
 

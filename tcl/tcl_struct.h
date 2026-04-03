@@ -109,7 +109,7 @@ struct TCLR_Context{
 	int32_t parseStackIdx;
 	enum TCLR_FLAGS flags;
 	struct TCLS_Commands *program;
-	struct TCL_String (*parseStack)[TCLR_STACK_SIZE];
+	struct TCL_String *parseStack[TCLR_STACK_SIZE];
 	struct TCL_Scope *scope;
 	struct TCLF_Scope *fnScope;
 	struct TCLR_Context *parent;
@@ -135,6 +135,6 @@ typedef struct TCLF_Scope TCLF_Scope;
 typedef enum TCLR_FLAGS TCLR_FLAGS;
 typedef struct TCLR_Context TCLR_Context;
 // ======= fn typdef
-typedef void (*TCLF_NAT_Fn)(TCLR_Context **ctx,TCLS_Cmd *cmd);
+typedef TCL_String*(*TCLF_NAT_Fn)(TCLR_Context **ctx,TCLS_Cmd *cmd);
 
 #endif

@@ -37,6 +37,7 @@ void tclr_free_context(TCLR_Context *ctx){
 		free(ctx->parseStack[i]);
 	} //  */
 	if(ctx->parent == NULL){
+		db_print_stringArena(ctx->arena);
 		tclf_free_function_scope(&(ctx->fnScope));
 		tcl_garbage_collect_string_arena(&(ctx->arena));
 		free(ctx->arena);
@@ -117,7 +118,11 @@ TCL_String *tclr_compile_str(TCLR_Context *ctx,int32_t *stack,TCL_String *base){
 		if(base->data[strIdx] == '[' && base->data[strIdx + 1] == ']'){
 			TCL_String *stStr = ctx->parseStack[*stack];
 			(*stack)++;
+			strIdx++;
+			if(stStr == NULL)
+				continue;
 			tcl_string_cp(&outStr,stStr);
+			stStr->refs--;
 			continue;
 		}
 		if(base->data[strIdx] == '$' && state == 0){
@@ -160,6 +165,8 @@ void tclr_step_instruction(TCLR_Context **ctx_ptr){
 	execCmd->length = curCmd->length;
 	execCmd->capacity = curCmd->length;
 	execCmd->stackDepth = curCmd->stackDepth;
+	execCmd->flags = curCmd->flags;
+	execCmd->moreData = curCmd->moreData;
 
 	int32_t stOff = execCmd->stackDepth;
 	execCmd->command = tclr_compile_str(ctx,&stOff,curCmd->command);
@@ -173,6 +180,9 @@ void tclr_step_instruction(TCLR_Context **ctx_ptr){
 		db_print_cmd(curCmd);
 
 		ctx->instruction++;
+		if(curCmd->flags == TCLS_CMD_PUSH)
+			ctx->parseStack[curCmd->stackDepth] = NULL;
+		execCmd->command->refs--;
 		free(execCmd); /// 
 		// TODO if fnIdx->flags == TCLF_FN_PUSH
 		return;
@@ -192,10 +202,20 @@ void tclr_step_instruction(TCLR_Context **ctx_ptr){
 			tcl_set_string_arena(&(ctx->arena),execCmd->arguments[i]);
 		}
 	}
+	TCL_String *returned = NULL;
 	// TODO
 	if(fnIdx->flags == TCLF_FN_NATIVE){
-		((TCLF_NAT_Fn)(fnIdx->natFn))(&ctx,execCmd);
+		returned = ((TCLF_NAT_Fn)(fnIdx->natFn))(&ctx,execCmd);
+		curCmd->moreData = execCmd->moreData;
 	}
+	if(curCmd->flags == TCLS_CMD_PUSH){
+		ctx->parseStack[curCmd->stackDepth] = returned;
+		if(returned != NULL)returned->refs++;
+	}
+	if(returned != NULL){
+		tcl_set_string_arena(&(ctx->arena),returned);
+	}
+	returned = returned;
 	tcls_free_cmd(&execCmd);
 	ctx->instruction++;
 }

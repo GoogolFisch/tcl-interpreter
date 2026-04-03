@@ -231,7 +231,18 @@ TCL_StringArena *tcl_create_string_arena(void){
 	arena->capacity = TCL_MIN_CAPACITY;
 	return arena;
 }
+#define TCL_STRING_REFS_FLAG(refs) (1 << (sizeof(refs) * 8 - 2))
 void tcl_set_string_arena(TCL_StringArena **stringArena,TCL_String *string){
+	if(string->refs & TCL_STRING_REFS_FLAG(string->refs))
+		return;
+//
+	for(int32_t idx = 0;idx < (*stringArena)->length;idx++){
+		if((*stringArena)->string[idx] == string){
+			return;
+		}
+	}
+//
+	string->refs |= TCL_STRING_REFS_FLAG(string->refs);
 	if((*stringArena)->length >= (*stringArena)->capacity){
 		(*stringArena)->capacity *= 2;
 		*stringArena = realloc(*stringArena,sizeof(TCL_Scope) +
@@ -243,18 +254,21 @@ void tcl_set_string_arena(TCL_StringArena **stringArena,TCL_String *string){
 }
 void tcl_garbage_collect_string_arena(TCL_StringArena **stringArena){
 	TCL_StringArena *arena = *stringArena;
+	int32_t refs;
 	for(int idx = 0;idx < arena->length;idx++){
 		TCL_String *string = arena->string[idx];
-		if(string->refs < 0){
+		refs = string->refs & ~TCL_STRING_REFS_FLAG(string->refs);
+		if(refs < 0){
 			*(int32_t*)NULL = 0;
 		}
-		if(string->refs)continue;
+		if(refs)continue;
 		arena->string[idx] = arena->string[arena->length - 1];
 		arena->length--;
 		free(string);
 		idx--;
 	}
 }
+#undef TCL_STRING_REFS_FLAG
 
 
 #endif

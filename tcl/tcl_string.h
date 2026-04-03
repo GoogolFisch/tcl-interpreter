@@ -250,7 +250,6 @@ static TCL_String *_tcls_var_mkString(TCL_StringArena **stringArena,
 			int32_t lower = strIdx + 1;
 			int32_t upper = _tcls_string_length_square(
 					str->data,str->length,strIdx) - 1;
-			(*cStack)++;
 			TCLS_Cmd *cmd = NULL;
 			while(lower < upper){
 				TCLS_Cmd *lowCmd = tcls_cmd_parse(stringArena,
@@ -258,6 +257,7 @@ static TCL_String *_tcls_var_mkString(TCL_StringArena **stringArena,
 				if(lowCmd == NULL)break;
 				cmd = lowCmd;
 			}
+			(*cStack)++;
 			if(cmd != NULL){
 				cmd->flags = TCLS_CMD_PUSH;
 			}
