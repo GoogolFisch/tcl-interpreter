@@ -81,16 +81,19 @@ struct TCLS_Commands{
 };
 //
 enum TCLF_FN_FLAGS{
-	TCLF_FN_CONVERT, 
-	TCLF_FN_NATIVE, 
-	TCLF_FN_RAW, 
+	TCLF_FN_PROC,
+	TCLF_FN_NATIVE,
+	TCLF_FN_RAW,
 };
 struct TCLF_KV{
 	size_t kHash;
 	struct TCL_String *key;
 	enum TCLF_FN_FLAGS flags;
-	struct TCLS_Commands *cmds;
 	void *(natFn);
+	void *(freeFn);
+	struct TCL_String *arguments;
+	//struct TCL_String *body;
+	struct TCLS_Commands *body;
 };
 struct TCLF_Scope{
 	int32_t length;

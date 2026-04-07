@@ -130,10 +130,10 @@ TCL_String *tclr_compile_str(TCLR_Context *ctx,int32_t *stack,TCL_String *base){
 			TCL_String *varStr = tclr_get_var_slice(base,&ofVar);
 			// TODO indexing with ( and )
 			TCL_String *fetch = tcl_get_from_scope(&(ctx->scope),varStr);
-			free(varStr);
 			if(fetch == NULL){
-				printf("Variable not found! (475b4b5c-bc52-4517-82ac-a82fec7f7b25)\n");
+				printf("Variable not found %.*s! (475b4b5c-bc52-4517-82ac-a82fec7f7b25)\n",varStr->length,varStr->data);
 			}
+			free(varStr);
 			tcl_string_cp(&outStr,fetch);
 			//free(fetch);
 			strIdx = ofVar;
@@ -196,10 +196,14 @@ void tclr_step_instruction(TCLR_Context **ctx_ptr){
 	}
 	else{
 		for(int32_t i = 0;i < curCmd->length;i++){
-			execCmd->arguments[i] = tclr_compile_str(
-					ctx,&stOff,curCmd->arguments[i]);
+			if(curCmd->arguments[i]->tags & TCL_ST_Variable){
+				execCmd->arguments[i] = tclr_compile_str(
+						ctx,&stOff,curCmd->arguments[i]);
+				tcl_set_string_arena(&(ctx->arena),execCmd->arguments[i]);
+			}else{
+				execCmd->arguments[i] = curCmd->arguments[i];
+			}
 			execCmd->arguments[i]->refs++;
-			tcl_set_string_arena(&(ctx->arena),execCmd->arguments[i]);
 		}
 	}
 	TCL_String *returned = NULL;
@@ -207,6 +211,12 @@ void tclr_step_instruction(TCLR_Context **ctx_ptr){
 	if(fnIdx->flags == TCLF_FN_NATIVE){
 		returned = ((TCLF_NAT_Fn)(fnIdx->natFn))(&ctx,execCmd);
 		curCmd->moreData = execCmd->moreData;
+	}else if(fnIdx->flags == TCLF_FN_PROC){
+		TCLR_Context *lowCtx = tclr_make_context(ctx,TCLR_FULL_LAYER);
+		// TODO add argument parsing!
+		lowCtx->program = fnIdx->body;
+		(*ctx_ptr) = lowCtx;
+		// TODO also think about return values!
 	}
 	if(curCmd->flags == TCLS_CMD_PUSH){
 		ctx->parseStack[curCmd->stackDepth] = returned;
