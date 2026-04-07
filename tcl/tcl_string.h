@@ -19,9 +19,24 @@ TCLS_Commands *tcls_parse_commands(TCL_StringArena **stringArena,TCL_String *str
 void tcls_free_cmd(TCLS_Cmd **cmd);
 void tcls_free_commands(TCLS_Commands **tcmd);
 
+TCL_String *tcls_list_iter(TCL_Slice **slice);
+
+
 // until where
+static int32_t _tcls_string_skip_white(uint8_t str[],int32_t length,int32_t index);
 static int32_t _tcls_string_length_square(uint8_t str[],int32_t length,int32_t index);
 //
+static int32_t _tcls_string_skip_white(uint8_t str[],int32_t length,int32_t index){
+	for(;index < length;index++){
+		if(str[index] == ' ')continue;
+		if(str[index] == '\t')continue;
+		if(str[index] == '\r')continue;
+		if(str[index] == '\n')continue;
+		if(str[index] == ';')continue;
+		break;
+	}
+	return index;
+}
 static int32_t _tcls_string_length_word(uint8_t str[],int32_t length,int32_t index,char brk){
 	// from " this untill this "
 	int32_t ending = index;
@@ -519,6 +534,25 @@ void tcls_free_commands(TCLS_Commands **tcmd){
 		free(c);
 	}
 	free(cmds);
+}
+
+// NOTE you have to free the String
+TCL_String *tcls_list_iter(TCL_Slice **slice){
+	TCL_Slice *slc = *slice;
+	int32_t lower = slc->offset;
+	int32_t upper = _tcls_string_get_length_array(
+			slc->string->data,slc->length,lower,0);
+	TCL_String *str = _tcls_make_string_from_bound(
+			slc->string->data,lower,slice->length);
+	upper = _tcls_string_skip_white(slc->string->data,slice->length,upper);
+	slc->length -= upper - lower;
+	slc->offset += upper - lower;
+	if(slc->length < 0){
+		free(slc);
+		*slice = NULL;
+	}
+
+	return str;
 }
 
 #endif
