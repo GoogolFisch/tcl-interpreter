@@ -543,8 +543,8 @@ TCL_String *tcls_list_iter(TCL_Slice **slice){
 	int32_t upper = _tcls_string_get_length_array(
 			slc->string->data,slc->length,lower,0);
 	TCL_String *str = _tcls_make_string_from_bound(
-			slc->string->data,lower,slice->length);
-	upper = _tcls_string_skip_white(slc->string->data,slice->length,upper);
+			slc->string->data,lower,slc->length);
+	upper = _tcls_string_skip_white(slc->string->data,slc->length,upper);
 	slc->length -= upper - lower;
 	slc->offset += upper - lower;
 	if(slc->length < 0){

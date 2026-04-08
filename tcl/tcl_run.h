@@ -146,6 +146,17 @@ TCL_String *tclr_compile_str(TCLR_Context *ctx,int32_t *stack,TCL_String *base){
 	}
 	return outStr;
 }
+void _tclr_fill_scope(TCL_StringArena **arena,TCL_Scope **scope,TCL_String *str,TCLS_Cmd *cmd){
+	TCL_Slice *slc = malloc(sizeof(TCL_Slice));
+	slc->length = str->length;
+	slc->offset = 0;
+	slc->string = str;
+	for(int32_t idx = 0;slc != NULL && idx < cmd->length;idx++){
+		TCL_String *key = tcls_list_iter(&slc);
+		tcl_set_into_scope(scope,key,cmd->arguments[idx]);
+		tcl_set_string_arena(arena,key);
+	}
+}
 
 void tclr_step_instruction(TCLR_Context **ctx_ptr){
 	TCLR_Context *ctx = *ctx_ptr;
@@ -214,6 +225,8 @@ void tclr_step_instruction(TCLR_Context **ctx_ptr){
 	}else if(fnIdx->flags == TCLF_FN_PROC){
 		TCLR_Context *lowCtx = tclr_make_context(ctx,TCLR_FULL_LAYER);
 		// TODO add argument parsing!
+		_tclr_fill_scope(&(lowCtx->arena),&(lowCtx->scope),
+				fnIdx->arguments,execCmd);
 		lowCtx->program = fnIdx->body;
 		(*ctx_ptr) = lowCtx;
 		// TODO also think about return values!
