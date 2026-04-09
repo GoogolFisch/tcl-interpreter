@@ -71,6 +71,8 @@ void tclf_free_function_scope(TCLF_Scope **fns){
 	for(int32_t fidx = 0;fidx < fnScope->length;fidx++){
 		struct TCLF_KV *fkv = &(fnScope->kv[fidx]);
 		fkv->key->refs--;
+		if(fkv->arguments != NULL)
+			fkv->arguments->refs--;
 		if(fkv->body != NULL)
 			tcls_free_commands(&(fkv->body));
 	}

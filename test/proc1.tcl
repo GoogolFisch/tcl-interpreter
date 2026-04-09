@@ -4,3 +4,4 @@ proc factorial {n} {
     return [expr {$n * [factorial [expr {$n - 1}]]}]
 }
 puts "5! = [factorial 5]"
+puts "4! = [factorial 4]"

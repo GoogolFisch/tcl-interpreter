@@ -30,8 +30,10 @@ TCLR_Context *tclr_make_context(TCLR_Context *ctx,TCLR_FLAGS flag){
 	return cOut;
 }
 void tclr_free_context(TCLR_Context *ctx){
+	tcl_garbage_collect_string_arena(&(ctx->arena));
 	tcl_drop_scope(&(ctx->scope));
-	tcls_free_commands(&(ctx->program));
+	if(ctx->program->refs == 0)
+		tcls_free_commands(&(ctx->program));
 	/* / ?????
 	for(int i = 0;i < ctx->parseStackIdx;i++){
 		free(ctx->parseStack[i]);
@@ -128,6 +130,7 @@ TCL_String *tclr_compile_str(TCLR_Context *ctx,int32_t *stack,TCL_String *base){
 		if(base->data[strIdx] == '$' && state == 0){
 			int32_t ofVar = strIdx + 1;
 			TCL_String *varStr = tclr_get_var_slice(base,&ofVar);
+			strIdx += varStr->length;
 			// TODO indexing with ( and )
 			TCL_String *fetch = tcl_get_from_scope(&(ctx->scope),varStr);
 			if(fetch == NULL){
@@ -141,6 +144,11 @@ TCL_String *tclr_compile_str(TCLR_Context *ctx,int32_t *stack,TCL_String *base){
 		}
 		if(base->data[strIdx] == '$' && state == 1)
 			outStr->length--;
+		if(outStr->length >= outStr->capacity){
+			outStr->capacity *= 2;
+			outStr = realloc(outStr,sizeof(TCL_String) +
+					sizeof(char) * outStr->capacity);
+		}
 		outStr->data[outStr->length] = base->data[strIdx];
 		outStr->length++;
 	}
@@ -162,6 +170,7 @@ void tclr_step_instruction(TCLR_Context **ctx_ptr){
 	TCLR_Context *ctx = *ctx_ptr;
 	if(ctx == NULL)return;
 	if((*ctx_ptr)->program->length <= ctx->instruction){
+		ctx->program->refs--;
 		TCLR_Context *freeing = ctx;
 		*ctx_ptr = (*ctx_ptr)->parent;
 		tclr_free_context(freeing);
@@ -228,6 +237,7 @@ void tclr_step_instruction(TCLR_Context **ctx_ptr){
 		_tclr_fill_scope(&(lowCtx->arena),&(lowCtx->scope),
 				fnIdx->arguments,execCmd);
 		lowCtx->program = fnIdx->body;
+		lowCtx->program->refs++;
 		(*ctx_ptr) = lowCtx;
 		// TODO also think about return values!
 	}

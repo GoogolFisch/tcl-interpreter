@@ -479,6 +479,7 @@ TCLS_Cmd *tcls_cmd_parse(TCL_StringArena **stringArena,
 	lowCmd->command = cmd;
 	// todo add more!
 	while(*index < upper && str->data[*index] == ' '){
+		// run only once!?
 		(*index)++;
 		_tcls_sub_parse_arguments(stringArena,str,tcmd,
 				&lowCmd,index,upper,&stackOffset);
@@ -541,17 +542,16 @@ TCL_String *tcls_list_iter(TCL_Slice **slice){
 	TCL_Slice *slc = *slice;
 	int32_t lower = slc->offset;
 	int32_t upper = _tcls_string_get_length_array(
-			slc->string->data,slc->length,lower,0);
+			slc->string->data,slc->length + lower,lower,0);
 	TCL_String *str = _tcls_make_string_from_bound(
-			slc->string->data,lower,slc->length);
+			slc->string->data,lower,upper);
 	upper = _tcls_string_skip_white(slc->string->data,slc->length,upper);
 	slc->length -= upper - lower;
 	slc->offset += upper - lower;
-	if(slc->length < 0){
+	if(slc->length <= 0){
 		free(slc);
 		*slice = NULL;
 	}
-
 	return str;
 }
 

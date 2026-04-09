@@ -55,6 +55,7 @@ TCL_String *procFunction(TCLR_Context **ctx,TCLS_Cmd *cmd){
 		return NULL;
 	}
 	TCLS_Commands *tcmd = tcls_parse_commands(&((*ctx)->arena),cmd->arguments[2]);
+	tcmd->refs++;
 	tclf_insert_procFunction(&((*ctx)->fnScope),cmd->arguments[0], 
 		cmd->arguments[1],tcmd);
 	return NULL;
