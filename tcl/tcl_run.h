@@ -64,6 +64,7 @@ TCL_String *tclr_get_var_slice(TCL_String *str,int32_t *index){
 		ending = _tcls_string_get_length_array(
 				str->data,str->length,*index,0);
 		outStr = _tcls_make_string_from_bound(str->data,begin + 1,ending - 1);
+		*index = ending;
 		return outStr;
 		/*
 		for(idx = begin;idx < ending;idx++){
@@ -102,6 +103,7 @@ TCL_String *tclr_get_var_slice(TCL_String *str,int32_t *index){
 		outStr->data[outStr->length] = str->data[idx];
 		outStr->length++;
 	}
+	*index = idx - 1;
 
 	return outStr;
 }
@@ -130,8 +132,8 @@ TCL_String *tclr_compile_str(TCLR_Context *ctx,int32_t *stack,TCL_String *base){
 		if(base->data[strIdx] == '$' && state == 0){
 			int32_t ofVar = strIdx + 1;
 			TCL_String *varStr = tclr_get_var_slice(base,&ofVar);
-			strIdx += varStr->length;
 			// TODO indexing with ( and )
+			//ofVar += varStr->length - 1;
 			TCL_String *fetch = tcl_get_from_scope(&(ctx->scope),varStr);
 			if(fetch == NULL){
 				printf("Variable not found %.*s! (475b4b5c-bc52-4517-82ac-a82fec7f7b25)\n",varStr->length,varStr->data);
