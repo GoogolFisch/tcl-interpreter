@@ -14,7 +14,7 @@ def isDigit(x):
     return x in "0123456789"
 def isNum(x):
     if(len(x) == 0):return True
-    if(x[0] == '-'): x = x[1:]
+    #if(x[0] == '-'): x = x[1:]
     st = 0
     for ch in x:
         if(ch == '.' and st == 0):st = 1
@@ -56,7 +56,7 @@ def opAct(ls,idx,low,upp):
     if(lidx < low or ridx >= upp):
         print("error during parsing!")
         print([str(t) for t in tok])
-        print(idx,low,upp)
+        print(idx,low,upp,lidx,ridx)
         raise Exception("Error")
     left = ls[lidx]
     right = ls[ridx]
@@ -90,11 +90,13 @@ def treeage(ls,low,upp):
     for idx in range(low,upp):
         item = ls[idx]
         if(item is None):continue
+        if(item.left != None and item.right != None):continue
         if(item.data in '*/%'):
             opAct(ls,idx,low,upp)
     for idx in range(low,upp):
         item = ls[idx]
         if(item is None):continue
+        if(item.left != None and item.right != None):continue
         if(item.data in '+-'):
             opAct(ls,idx,low,upp)
 
