@@ -16,7 +16,8 @@ struct TCLF_KV *tclf_get_function(TCLF_Scope *scope,TCL_String *str){
 	return NULL;
 }
 
-void tclf_insert_natFunction(TCLF_Scope **ptr_scope,TCL_String *str,TCLF_NAT_Fn fn){
+void tclf_insert_natFunction(TCLF_Scope **ptr_scope,TCL_String *str,
+		TCLF_NAT_Fn fn,TCLF_NAT_Fn *fee){
 	TCLF_Scope *scope = *ptr_scope;
 	if(scope->capacity <= scope->length){
 		scope->capacity *= 2;
@@ -29,7 +30,7 @@ void tclf_insert_natFunction(TCLF_Scope **ptr_scope,TCL_String *str,TCLF_NAT_Fn 
 	scope->kv[scope->length].kHash = hash;
 	scope->kv[scope->length].key = str;
 	scope->kv[scope->length].natFn = fn;
-	scope->kv[scope->length].freeFn = NULL;
+	scope->kv[scope->length].freeFn = fee;
 	scope->kv[scope->length].flags = TCLF_FN_NATIVE;
 	scope->kv[scope->length].body = NULL;
 	scope->kv[scope->length].arguments = NULL;

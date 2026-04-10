@@ -60,15 +60,42 @@ TCL_String *procFunction(TCLR_Context **ctx,TCLS_Cmd *cmd){
 		cmd->arguments[1],tcmd);
 	return NULL;
 }
+TCL_String *exprFunction(TCLR_Context **ctx,TCLS_Cmd *cmd){
+	ctx = ctx;
+	// proc {name} {args} {body}
+	printf("fn %.*s\n",cmd->command->length,cmd->command->data);
+	for(int32_t i = 0;i < cmd->length;i++){
+		printf("- %.*s\n",cmd->arguments[i]->length,cmd->arguments[i]->data);
+	}
+	if(cmd->length != 1){
+		printf("Err with set (62bf270b-ba0d-44ca-8bd2-5498044247ed)\n");
+		return NULL;
+	}
+	return NULL;
+}
+TCL_String *exprFunctionFree(TCLR_Context **ctx,TCLS_Cmd *cmd){
+	ctx = ctx;
+	// proc {name} {args} {body}
+	printf("fn %.*s\n",cmd->command->length,cmd->command->data);
+	for(int32_t i = 0;i < cmd->length;i++){
+		printf("- %.*s\n",cmd->arguments[i]->length,cmd->arguments[i]->data);
+	}
+	if(cmd->length != 1){
+		printf("Err with set (d0378443-5e77-4361-886d-45d58a2691da)\n");
+		return NULL;
+	}
+	return NULL;
+}
 
 #ifdef FN_REDEF_INIT
 #define load_init fn_load_core_init
 #endif
 void load_init(TCLR_Context **ctx){
-	insert_natFunction(ctx,"puts",putsFunction);
-	insert_natFunction(ctx,"set" , setFunction);
-	insert_natFunction(ctx,"incr",incrFunction);
-	insert_natFunction(ctx,"proc",procFunction);
+	insert_natFunction(ctx,"puts",putsFunction,NULL);
+	insert_natFunction(ctx,"set" , setFunction,NULL);
+	insert_natFunction(ctx,"incr",incrFunction,NULL);
+	insert_natFunction(ctx,"proc",procFunction,NULL);
+	insert_natFunction(ctx,"expr",exprFunction,exprFunctionFree);
 }
 #ifdef FN_REDEF_INIT
 #undef load_init
