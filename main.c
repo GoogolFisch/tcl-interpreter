@@ -1,5 +1,6 @@
 
 #include<stdlib.h>
+#include <unistd.h>
 #include<stdint.h>
 #include<stdio.h>
 #define TCL_IMPLEMENTATION
@@ -103,10 +104,27 @@ void free_ctx(TCLR_Context *ctx){
 	}
 }
 
+void oom_adj_set(void){
+#ifndef OOM_NO_ADJ
+	char spaceStr[256];
+	snprintf(spaceStr,255,"/proc/%i/oom_score_adj",getpid());
+	spaceStr[255] = 0;
+	FILE *oom_ptr = fopen(spaceStr,"w");
+	if(oom_ptr == NULL){
+		printf("ERROR not able to open %s\n",spaceStr);
+		return;
+	}
+	char oom_value[] = "500";
+	fwrite(oom_value,sizeof(char),sizeof(oom_value),oom_ptr);
+	fclose(oom_ptr);
+#endif
+}
+
 int32_t main(int32_t argc,char **argv,char **env){
 	if(argc <= 1){
 		return print_help(argc,argv,env);
 	}
+	oom_adj_set();
 	FILE *fptr;
 	char *fileName = NULL;
 	while(fileName == NULL){
