@@ -153,7 +153,8 @@ static int32_t _tcls_string_get_length_array(uint8_t str[],int32_t length,int32_
 	return -1;
 }
 
-static TCL_String *_tcls_make_string_from_bound(uint8_t str[],int32_t lower,int32_t upper){
+static TCL_String *_tcls_make_string_from_bound(uint8_t str[],
+		int32_t lower,int32_t upper,char doChange){
 	if(upper < lower)
 		*(size_t**)NULL = NULL;
 	TCL_String *strOut = malloc(sizeof(TCL_String) +
@@ -173,6 +174,10 @@ static TCL_String *_tcls_make_string_from_bound(uint8_t str[],int32_t lower,int3
 		}
 		else{
 			state = 0;
+			if(!doChange){
+				strOut->data[strOut->length++] = '\\';
+				strOut->data[strOut->length++] = str[idx];
+			}
 			//strOut->data[strOut->length++] = str[idx];
 			//   /*
 			if(str[idx] == 'a')
@@ -225,10 +230,16 @@ TCL_String *tcls_string_from_array(uint8_t *str,int32_t length,int32_t *index){
 	*index = ending;
 	TCL_String *strOut;
 	if(length >= beginning && str[beginning] != '"' && str[beginning] != '{'){
-		strOut = _tcls_make_string_from_bound(str,beginning,ending);
+		strOut = _tcls_make_string_from_bound(str,beginning,ending,1);
 		strOut->tags = TCL_ST_Variable;
+	}else if(str[beginning] == '"'){
+		strOut = _tcls_make_string_from_bound(str,beginning + 1,ending - 1,1);
+		strOut->tags = TCL_ST_Variable;
+	}else if(str[beginning] == '{'){
+		strOut = _tcls_make_string_from_bound(str,beginning + 1,ending - 1,0);
 	}else{
-		strOut = _tcls_make_string_from_bound(str,beginning + 1,ending - 1);
+		// RAISE ERROR
+		strOut = _tcls_make_string_from_bound(str,beginning + 1,ending - 1,0);
 		if(str[beginning] == '"')
 			strOut->tags = TCL_ST_Variable;
 	}
@@ -320,7 +331,7 @@ static void _tcls_sub_parse_arguments(TCL_StringArena **stringArena,
 		TCL_String *cc;
 		if(str->data[*index] == '{'){
 			cc = _tcls_make_string_from_bound(
-					str->data,*index + 1,ending - 1);
+					str->data,*index + 1,ending - 1,0);
 		} else{
 			cc = _tcls_var_mkString(stringArena,str,tcmd,
 					ptr_cmd,index,ending,cStack);
@@ -544,7 +555,7 @@ TCL_String *tcls_list_iter(TCL_Slice **slice){
 	int32_t upper = _tcls_string_get_length_array(
 			slc->string->data,slc->length + lower,lower,0);
 	TCL_String *str = _tcls_make_string_from_bound(
-			slc->string->data,lower,upper);
+			slc->string->data,lower,upper,1);
 	upper = _tcls_string_skip_white(slc->string->data,slc->length,upper);
 	slc->length -= upper - lower;
 	slc->offset += upper - lower;

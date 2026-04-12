@@ -28,6 +28,7 @@ struct TCL_String{
 	int32_t refs;
 	int32_t tags;
 	int32_t length;
+	void *gmp;
 	int32_t capacity;
 	uint8_t data[];
 };
@@ -106,11 +107,17 @@ enum TCLR_FLAGS{
 	TCLR_FULL_LAYER = 1,
 	TCLR_NEGATIVE_LAYER = 2,
 };
+enum TCLRG_VARIABLE{
+	TCLRG_SHOW_AST = 1,
+	TCLRG_SHOW_GC = 2,
+	TCLRG_VERBOSE_EXEC = 4,
+};
 struct TCLR_Context{
 	//
 	int32_t instruction;
 	int32_t parseStackIdx;
 	enum TCLR_FLAGS flags;
+	enum TCLRG_VARIABLE globFlags;
 	struct TCLS_Commands *program;
 	struct TCL_String *parseStack[TCLR_STACK_SIZE];
 	struct TCL_Scope *scope;

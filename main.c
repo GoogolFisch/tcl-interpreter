@@ -11,8 +11,25 @@
 
 // bla bla bla bla
 
-char g_ShowAst = 0;
+//char g_ShowAst = 0;
 
+int32_t print_error(int32_t argc,char **argv,char **env){
+	argc = argc;
+	argv = argv;
+	env = env;
+	return 0;
+}
+struct densify{
+	char *name;
+	enum TCLRG_VARIABLE val;
+};
+int32_t denC = 3;
+const struct densify den[] = {
+	{.name = "show-ast",.val=TCLRG_SHOW_AST},
+	{.name = "show-gc",.val=TCLRG_SHOW_GC},
+	{.name = "verb-exec",.val=TCLRG_VERBOSE_EXEC},
+	{.name = NULL,.val = 0},
+};
 int32_t print_help(int32_t argc,char **argv,char **env){
 	printf("Usage of %s\n",argv[0]);
 	printf("Arg count:%i\n",argc);
@@ -24,18 +41,24 @@ int32_t print_help(int32_t argc,char **argv,char **env){
 	for(i = 0;env[i] != NULL;i++){
 		printf("- %s\n",env[i]);
 	}
+	printf("Flags:\n");
+	for(i = 0;i < denC && den[i].name != NULL;i++){
+		printf("-%s\n",den[i].name);
+	}
 	return 0;
 }
-int32_t print_error(int32_t argc,char **argv,char **env){
+int32_t set_variable(int32_t argc,char **argv,char **env,enum TCLRG_VARIABLE *flag){
 	argc = argc;
 	argv = argv;
-	env = env;
-	return 0;
-}
-int32_t set_variable(int32_t argc,char **argv,char **env){
-	if(argv[0][1] == 'a')g_ShowAst = 1;
-	argc = argc;
-	argv = argv;
+	for(int32_t j = 0;j < denC && den[j].name != NULL;j++){
+		for(int32_t idx = 1;argv[0][idx] != 0;idx++){
+			if(argv[0][idx] != den[j].name[idx - 1])
+				goto _set_var_continue;
+		}
+		*flag |= den[j].val;
+
+_set_var_continue:
+	}
 	env = env;
 	return 0;
 }
@@ -124,6 +147,7 @@ int32_t main(int32_t argc,char **argv,char **env){
 	if(argc <= 1){
 		return print_help(argc,argv,env);
 	}
+	enum TCLRG_VARIABLE globFlag = 0;
 	oom_adj_set();
 	FILE *fptr;
 	char *fileName = NULL;
@@ -133,7 +157,7 @@ int32_t main(int32_t argc,char **argv,char **env){
 		if(argc < 1)
 			return print_error(argc,argv,env);
 		if(argv[0][0] == '-'){
-			if(set_variable(argc,argv,env))
+			if(set_variable(argc,argv,env,&globFlag))
 				return print_error(argc,argv,env);
 			continue;
 		}
@@ -155,10 +179,16 @@ int32_t main(int32_t argc,char **argv,char **env){
 	
 	//printf("File: %s\n%s\n",fileName,fileData);
 	TCLR_Context *ctx = make_ctx(length,fileData);
-	if(!g_ShowAst)
+	ctx->globFlags = globFlag;
+	if(globFlag & TCLRG_SHOW_AST){
+		db_print_commands(ctx->program);
+	}
+	run_ctx(&ctx);
+	/*if(!g_ShowAst)
 		run_ctx(&ctx);
 	else
 		db_print_commands(ctx->program);
+	*/
 
 
 	free_ctx(ctx);

@@ -23,6 +23,7 @@ TCLR_Context *tclr_make_context(TCLR_Context *ctx,TCLR_FLAGS flag){
 	cOut->vparent = NULL;
 	cOut->arena = (ctx == NULL) ? NULL : ctx->arena;
 	cOut->fnScope = (ctx == NULL) ? NULL : ctx->fnScope;
+	cOut->globFlags = (ctx == NULL) ? 0 : ctx->globFlags;
 	//
 	if(flag & TCLR_NEGATIVE_LAYER)
 		cOut->vparent = ctx;
@@ -39,7 +40,9 @@ void tclr_free_context(TCLR_Context *ctx){
 		free(ctx->parseStack[i]);
 	} //  */
 	if(ctx->parent == NULL){
-		db_print_stringArena(ctx->arena);
+		if(ctx->globFlags & TCLRG_SHOW_GC){
+			db_print_stringArena(ctx->arena);
+		}
 		tclf_free_function_scope(&(ctx->fnScope));
 		tcl_garbage_collect_string_arena(&(ctx->arena));
 		free(ctx->arena);
@@ -63,7 +66,7 @@ TCL_String *tclr_get_var_slice(TCL_String *str,int32_t *index){
 	if(str->data[*index] == '{'){
 		ending = _tcls_string_get_length_array(
 				str->data,str->length,*index,0);
-		outStr = _tcls_make_string_from_bound(str->data,begin + 1,ending - 1);
+		outStr = _tcls_make_string_from_bound(str->data,begin + 1,ending - 1,0);
 		*index = ending;
 		return outStr;
 		/*
@@ -231,7 +234,15 @@ void tclr_step_instruction(TCLR_Context **ctx_ptr){
 	TCL_String *returned = NULL;
 	// TODO
 	if(fnIdx->flags == TCLF_FN_NATIVE){
-		returned = ((TCLF_NAT_Fn)(fnIdx->natFn))(&ctx,execCmd);
+		if(ctx->globFlags & TCLRG_VERBOSE_EXEC){
+			printf("fn %.*s\n",   execCmd->command->length,
+					      execCmd->command->data);
+			for(int32_t i = 0;i < execCmd->length;i++){
+				printf("- %.*s\n",  execCmd->arguments[i]->length,
+						    execCmd->arguments[i]->data);
+			}
+		}
+		returned = ((TCLF_NAT_Fn)(fnIdx->natFn))(ctx_ptr,execCmd);
 		curCmd->moreData = execCmd->moreData;
 	}else if(fnIdx->flags == TCLF_FN_PROC){
 		TCLR_Context *lowCtx = tclr_make_context(ctx,TCLR_FULL_LAYER);
