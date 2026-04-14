@@ -30,9 +30,30 @@ void exprTokenise(TCLCORE_Expr **exprList,TCL_String *str){
 	};
 	//
 	char state = 0;
+	char move;
 	idx = 0;
-	goto expr_token_skip_first;
+	goto expr_token_skip;
 	for(;idx < str->length;idx++){
+		move = str->data[idx];
+		if((uint8_t)      move >= 128) move = ':';
+		if(move >= 'A' && move <= 'Z') move = ':';
+		if(move >= 'a' && move <= 'z') move = ':';
+		if(move == '_') move = ':';
+		if(move >= '0' && move <= '9') move = '0';
+		//
+		if(state == '$' && move == ':')goto expr_token_skip;
+		if(state == '0' && move == '0')goto expr_token_skip;
+		if(state == ':' && move == ':')goto expr_token_skip;
+		if(state == '0' && move == '.'){
+			state = '.';
+			goto expr_token_skip;
+		}
+		if(move == ' ' || move == '\t' ||
+				move == '\r' || move == '\n'){
+			state = 0;
+			continue;
+		}
+		
 		if(expr->length >= expr->capacity){
 			expr->capacity *= 2;
 			size_t sz = sizeof(TCLCORE_Expr);
@@ -45,15 +66,16 @@ void exprTokenise(TCLCORE_Expr **exprList,TCL_String *str){
 			.length = 0, .offset = idx,  .string = str,
 		};
 		//
-expr_token_skip_first:
+expr_token_skip:
 		expr->expr[exprOff].str.length++;
 		if(state == 0){
 			state = str->data[idx];
+			if((uint8_t)       state >= 128) state = ':';
 			if(state >= 'A' && state <= 'Z') state = ':';
 			if(state >= 'a' && state <= 'z') state = ':';
 			if(state == '_') state = ':';
 			if(state >= '0' && state <= '9') state = '0';
-			//if(state == '.') state = '.'
+			//if(state == '.') state = '.';
 		}
 	}
 }
