@@ -21,6 +21,10 @@ enum TCL_String_Tags{
 	TCL_ST_Variable,
 	TCL_ST_LookUp,
 	TCL_ST_Object,
+
+	TCL_ST_Int = 64,
+	TCL_ST_Quot = 128,
+	TCL_ST_Reals = 192,
 };
 
 // should be immutable when refs > 1?

@@ -213,6 +213,7 @@ TCL_String *exprTokenInterpret(TCLR_Context *ctx,TCLCORE_Expr *exprList,
 	TCL_String *left  = exprTokenInterpret(ctx,exprList,exprList->expr[idx].left );
 	TCL_String *right = exprTokenInterpret(ctx,exprList,exprList->expr[idx].right);
 	if(slc->string->data[slc->offset] == '*'){
+	
 	}
 	left = left;
 	right = right;
