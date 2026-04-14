@@ -37,10 +37,13 @@ void exprTokenise(TCLCORE_Expr **exprList,TCL_String *str){
 	expr->expr[0].str = (TCL_Slice){   .refs = 1, .tags = 0,
 		.length = 0, .offset = 0,  .string = str,
 	};
+	expr->expr[0].left = -1;
+	expr->expr[0].right = -1;
 	//
 	char state = 0;
 	char move;
 	idx = 0;
+	expr->length++;
 	goto expr_token_append;
 	for(;idx < str->length;idx++){
 		move = str->data[idx];
@@ -63,6 +66,9 @@ void exprTokenise(TCLCORE_Expr **exprList,TCL_String *str){
 			continue;
 		}
 		
+		//
+		exprOff++;
+		expr->length++;
 		if(expr->length >= expr->capacity){
 			expr->capacity *= 2;
 			size_t sz = sizeof(TCLCORE_Expr);
@@ -84,6 +90,9 @@ expr_token_append:
 			if(state >= 'a' && state <= 'z') state = ':';
 			if(                state == '_') state = ':';
 			if(state >= '0' && state <= '9') state = '0';
+			if(state == '$'){
+				expr->expr[exprOff].str.tags = TCL_ST_Variable;
+			}
 			//if(state == '.') state = '.';
 		}
 	}
@@ -168,7 +177,7 @@ int32_t exprTokenOverList(TCLCORE_Expr *exprList,
 		if(slc->string->data[slc->offset] == '%')
 			exprTokenOperationTree(exprList,idx,lower,upper,0);
 	}
-	/// combine * % /
+	/// combine + -
 	for(idx = lower;idx < upper;idx++){
 		TCL_Slice *slc = &(exprList->expr[idx].str);
 		if(slc->length == 0)continue;
@@ -181,6 +190,37 @@ int32_t exprTokenOverList(TCLCORE_Expr *exprList,
 	}
 	
 	return 0;
+}
+TCL_String *exprTokenInterpret(TCLR_Context *ctx,TCLCORE_Expr *exprList,
+		int32_t idx){
+	TCL_String *outStr = NULL;
+	if(idx == -1)
+		return outStr;
+	TCL_Slice *slc = &(exprList->expr[idx].str);
+	if(slc->tags == TCL_ST_Variable){
+		/*
+		TCL_Slice vslice = (TCL_Slice){
+			.refs = 1, .flags = 0,
+			.length = slc->length - 1,
+			.offset = slc->offset + 1,
+			.string = slc->string,
+		};
+		outStr = tcl_get_from_scope_slice(&(ctx->scope),vslice);
+		//  */
+		outStr = tcl_get_from_scope_slice(&(ctx->scope),slc);
+		return outStr;
+	}
+	TCL_String *left  = exprTokenInterpret(ctx,exprList,exprList->expr[idx].left );
+	TCL_String *right = exprTokenInterpret(ctx,exprList,exprList->expr[idx].right);
+	if(slc->string->data[slc->offset] == '*'){
+	}
+	left = left;
+	right = right;
+
+
+	if(outStr != NULL)
+		tcl_set_string_arena(&(ctx->arena),outStr);
+	return outStr;
 }
 
 
@@ -205,7 +245,8 @@ TCL_String *exprFunctionFree(TCLR_Context **ctx,TCLS_Cmd *cmd){
 	*/
 	if(cmd->moreData != NULL){
 		// TODO also free potential memory in the LIST
-		free(cmd->moreData);
+		exprTokensFree((TCLCORE_Expr*)cmd->moreData);
+		cmd->moreData = NULL;
 	}
 	return NULL;
 }
@@ -220,11 +261,35 @@ TCL_String *exprFunction(TCLR_Context **ctx,TCLS_Cmd *cmd){
 		printf("Err with set (62bf270b-ba0d-44ca-8bd2-5498044247ed)\n");
 		return NULL;
 	}
-	TCLCORE_Expr *exprPtr = malloc(sizeof(TCLCORE_Expr) +
-			sizeof(TCLCORE_LIST_Expr) * 128);
-	exprPtr->capacity = 128;
-	exprPtr->length = 0;
-	return NULL;
+	TCLCORE_Expr *exprPtr = cmd->moreData;
+	int32_t error = 0;
+	if(cmd->moreData == NULL){
+		exprPtr = malloc(sizeof(TCLCORE_Expr) +
+				sizeof(TCLCORE_LIST_Expr) * 128);
+		exprPtr->capacity = 128;
+		exprPtr->length = 0;
+		exprTokenise(&exprPtr,cmd->arguments[0]);
+		error = exprTokenOverList(exprPtr,0,exprPtr->length,0);
+	}
+	TCL_String *outStr = NULL;
+	// TODO
+	if(!error){
+		int32_t idx = 0;
+		for(idx = 0;idx < exprPtr->length;idx++){
+			if(exprPtr->expr[idx].flags == EXPR_LISTF_FREE)break;
+		}
+		if(idx < exprPtr->length){
+			outStr = exprTokenInterpret(*ctx,exprPtr,idx);
+		}
+	}
+	// make this compute stuff!
+	if(cmd->arguments[0]->tags == TCL_ST_None && !error)
+		cmd->moreData = exprPtr;
+	else{
+		cmd->moreData = NULL;
+		exprTokensFree(exprPtr);
+	}
+	return outStr;
 }
 
 #endif

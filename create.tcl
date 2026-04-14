@@ -5,10 +5,11 @@ set CC "gcc"
 set warnings "-Wall -Wextra -Wno-missing-field-initializers"
 set sanitizer "-fsanitize=address,undefined"
 set debug "-ggdb" ;# -Og"
+set libs "-lgmp -lm" ;# -Og"
 set build "build"
 
 file mkdir "./$build/"
-if { [catch "exec $CC $debug $warnings $sanitizer ./main.c -o ./$build/tcl.out" fid] } {
+if { [catch "exec $CC $debug $libs $warnings $sanitizer ./main.c -o ./$build/tcl.out" fid] } {
 	set comb ""
 	set cnt 30
 	foreach {pt} [split $fid "\n"] {
