@@ -5,6 +5,7 @@
 enum EXPR_LIST_Flags{
 	EXPR_LISTF_FREE = 0,
 	EXPR_LISTF_USED = 1,
+	EXPR_LISTF_CALL = 2,
 };
 typedef struct TCLCORE_LIST_Expr{
 	enum EXPR_LIST_Flags flags;
@@ -108,7 +109,7 @@ int32_t exprTokenOperationTree(TCLCORE_Expr *exprList,int32_t home,
 				break;
 			left --;
 		}
-		if(left  <  lower)return 1;
+		if(left  <  lower)return 1 + home;
 		exprList->expr[left ].flags = EXPR_LISTF_USED;
 		exprList->expr[home ].left  = left;
 	}
@@ -118,10 +119,67 @@ int32_t exprTokenOperationTree(TCLCORE_Expr *exprList,int32_t home,
 				break;
 			right++;
 		}
-		if(right >= upper)return 1;
+		if(right >= upper)return 1 + home;
 		exprList->expr[right].flags = EXPR_LISTF_USED;
 		exprList->expr[home ].right = right;
 	}
+	return 0;
+}
+int32_t exprTokenOverList(TCLCORE_Expr *exprList,
+		int32_t lower,int32_t upper,
+		char inFlags){
+
+	int32_t stack = 0;
+	int32_t stackBack;
+	int32_t idx;
+	for(idx = lower;idx < upper;idx++){
+		TCL_Slice *slc = &(exprList->expr[idx].str);
+		if(slc->length == 0)continue;
+		// never run vvvv
+		if(exprList->expr[idx].flags == EXPR_LISTF_USED)continue;
+		//
+		if(slc->string->data[slc->offset] == '('){
+			if(stack == 0)stackBack = idx;
+			stack++;
+		}
+		if(slc->string->data[slc->offset] == ')'){
+			stack--;
+			if(stack == 0){
+				exprTokenOverList(exprList,
+						stackBack + 1,idx - 1,inFlags);
+				exprList->expr[stackBack].flags = EXPR_LISTF_CALL;
+				exprList->expr[idx      ].flags = EXPR_LISTF_CALL;
+				// TODO
+			}
+		}
+	}
+	if(stack)
+		return idx;
+	/// combine * % /
+	for(idx = lower;idx < upper;idx++){
+		TCL_Slice *slc = &(exprList->expr[idx].str);
+		if(slc->length == 0)continue;
+		if(exprList->expr[idx].flags == EXPR_LISTF_USED)continue;
+		//
+		if(slc->string->data[slc->offset] == '*')
+			exprTokenOperationTree(exprList,idx,lower,upper,0);
+		if(slc->string->data[slc->offset] == '/')
+			exprTokenOperationTree(exprList,idx,lower,upper,0);
+		if(slc->string->data[slc->offset] == '%')
+			exprTokenOperationTree(exprList,idx,lower,upper,0);
+	}
+	/// combine * % /
+	for(idx = lower;idx < upper;idx++){
+		TCL_Slice *slc = &(exprList->expr[idx].str);
+		if(slc->length == 0)continue;
+		if(exprList->expr[idx].flags == EXPR_LISTF_USED)continue;
+		//
+		if(slc->string->data[slc->offset] == '+')
+			exprTokenOperationTree(exprList,idx,lower,upper,0);
+		if(slc->string->data[slc->offset] == '-')
+			exprTokenOperationTree(exprList,idx,lower,upper,0);
+	}
+	
 	return 0;
 }
 
