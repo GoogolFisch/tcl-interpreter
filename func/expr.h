@@ -108,7 +108,7 @@ int32_t exprTokenOperationTree(TCLCORE_Expr *exprList,int32_t home,
 				break;
 			left --;
 		}
-		if(left  >= lower)return 1;
+		if(left  <  lower)return 1;
 		exprList->expr[left ].flags = EXPR_LISTF_USED;
 		exprList->expr[home ].left  = left;
 	}
@@ -118,7 +118,7 @@ int32_t exprTokenOperationTree(TCLCORE_Expr *exprList,int32_t home,
 				break;
 			right++;
 		}
-		if(right < upper)return 1;
+		if(right >= upper)return 1;
 		exprList->expr[right].flags = EXPR_LISTF_USED;
 		exprList->expr[home ].right = right;
 	}
