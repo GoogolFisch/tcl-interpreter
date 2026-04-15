@@ -140,7 +140,10 @@ TCL_String *tclr_compile_str(TCLR_Context *ctx,int32_t *stack,TCL_String *base){
 			TCL_String *fetch = tcl_get_from_scope(&(ctx->scope),varStr);
 			if(fetch == NULL){
 				printf("Variable not found %.*s! (475b4b5c-bc52-4517-82ac-a82fec7f7b25)\n",varStr->length,varStr->data);
+				continue;
 			}
+			if(fetch->deferCallback != NULL)
+				((TCL_DEFER_CBack)(fetch->deferCallback))(&fetch);
 			free(varStr);
 			tcl_string_cp(&outStr,fetch);
 			//free(fetch);

@@ -38,6 +38,7 @@ enum TCL_String_Tags{
 	TCL_ST_LookUp,
 	TCL_ST_Object,
 
+	//TCL_ST_Defer = 32,
 	TCL_ST_Int = 64,
 	TCL_ST_Quot = 128,
 	TCL_ST_Float = 192,
@@ -49,6 +50,7 @@ struct TCL_String{
 	int32_t tags;
 	int32_t length;
 	struct TCL_Number var;
+	void *deferCallback;
 	int32_t capacity;
 	uint8_t data[];
 };
@@ -169,6 +171,7 @@ typedef enum TCLR_FLAGS TCLR_FLAGS;
 typedef struct TCLR_Context TCLR_Context;
 // ======= fn typdef
 typedef TCL_String*(*TCLF_NAT_Fn)(TCLR_Context **ctx,TCLS_Cmd *cmd);
+typedef void(*TCL_DEFER_CBack)(TCL_String **str);
 
 
 #endif

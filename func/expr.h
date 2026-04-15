@@ -301,6 +301,58 @@ TCL_Number exprTokenInterpret(TCLR_Context *ctx,TCLCORE_Expr *exprList,
 
 	return outNum;
 }
+void exprResolveDefer(TCL_String **strptr){
+	//TCL_String mem = **strptr;
+	int32_t refs = (*strptr)->refs;
+	int32_t tags = (*strptr)->tags;
+	//tags &= ~TCL_ST_Defer;
+	struct TCL_Number var = (*strptr)->var;
+	int32_t vcap;
+	if((*strptr)->var.typ == NUMBERT_Float){
+		vcap = asprintf((char**)strptr,"%0*i%f",
+				(int)sizeof(TCL_String),0,
+				var.var.flt);
+	}
+	else if((*strptr)->var.typ == NUMBERT_Gmpz){
+		vcap = gmp_asprintf((char**)strptr,"%0*i%Zd",
+				(int)sizeof(TCL_String),0,
+				var.var.gmpz);
+	}
+	else if((*strptr)->var.typ == NUMBERT_Gmpq){
+		vcap = gmp_asprintf((char**)strptr,"%0*i%Qd",
+				(int)sizeof(TCL_String),0,
+				var.var.gmpq);
+	}
+	else if((*strptr)->var.typ == NUMBERT_Gmpf){
+		vcap = gmp_asprintf((char**)strptr,"%0*i%Fd",
+				(int)sizeof(TCL_String),0,
+				var.var.gmpf);
+	}
+	(*strptr)->capacity = vcap - sizeof(TCL_String) + 1;
+	(*strptr)->length = vcap - sizeof(TCL_String);
+	(*strptr)->refs = refs;
+	(*strptr)->deferCallback = NULL;
+	(*strptr)->tags = tags;
+	(*strptr)->var = var;
+}
+
+TCL_String *exprGetString(TCL_Number *num){
+	TCL_String *strOut = NULL;
+	strOut = malloc(sizeof(TCL_String));
+	strOut->var = *num;
+	strOut->length = 0;
+	strOut->capacity = 0;
+	strOut->refs = 0;
+	strOut->deferCallback = (void*)exprResolveDefer;
+	strOut->tags = 0;//TLC_ST_Defer;
+	/*
+	if((num->typ & NUMBERT_Mask) == NUMBERT_Gmpz);
+	if((num->typ & NUMBERT_Mask) == NUMBERT_Gmpq);
+	if((num->typ & NUMBERT_Mask) == NUMBERT_Gmpf);
+	*/
+
+	return strOut;
+}
 
 
 
@@ -364,9 +416,7 @@ TCL_String *exprFunction(TCLR_Context **ctx,TCLS_Cmd *cmd){
 		tcl_set_string_arena(&(ctx->arena),outStr);
 		*/
 			// TODO FIXME do string stuff!
-			outStr = malloc(sizeof(TCL_String) +
-					sizeof(char) * 100);
-			num = num;
+			outStr = exprGetString(&num);
 			tcl_set_string_arena(&((*ctx)->arena),outStr);
 		}
 	}
