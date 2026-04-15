@@ -79,6 +79,7 @@ TCL_String *tclr_get_var_slice(TCL_String *str,int32_t *index){
 	}
 	outStr = malloc(sizeof(TCL_String) +
 			sizeof(char) * TCL_MIN_CAPACITY);
+	outStr->var.typ = 0;
 	outStr->capacity = TCL_MIN_CAPACITY;
 	outStr->length = 0;
 	outStr->refs = 0;
@@ -100,7 +101,7 @@ TCL_String *tclr_get_var_slice(TCL_String *str,int32_t *index){
 		if(contains == 0)break;
 		if(outStr->capacity <= outStr->length){
 			outStr->capacity *= 2;
-			outStr = malloc(sizeof(TCL_String) +
+			outStr = realloc(outStr,sizeof(TCL_String) +
 			sizeof(char) * TCL_MIN_CAPACITY);
 		}
 		outStr->data[outStr->length] = str->data[idx];
@@ -113,6 +114,7 @@ TCL_String *tclr_get_var_slice(TCL_String *str,int32_t *index){
 TCL_String *tclr_compile_str(TCLR_Context *ctx,int32_t *stack,TCL_String *base){
 	TCL_String *outStr = malloc(sizeof(TCL_String) + sizeof(char) * base->length);
 	outStr->length = 0;
+	outStr->var.typ = 0;
 	outStr->capacity = base->length;
 	outStr->refs = 0;
 	outStr->tags = 0;
@@ -139,11 +141,17 @@ TCL_String *tclr_compile_str(TCLR_Context *ctx,int32_t *stack,TCL_String *base){
 			//ofVar += varStr->length - 1;
 			TCL_String *fetch = tcl_get_from_scope(&(ctx->scope),varStr);
 			if(fetch == NULL){
-				printf("Variable not found %.*s! (475b4b5c-bc52-4517-82ac-a82fec7f7b25)\n",varStr->length,varStr->data);
+				printf("Variable not found %.*s!"
+				"(475b4b5c-bc52-4517-82ac-a82fec7f7b25)\n",
+				varStr->length,varStr->data);
 				continue;
 			}
-			if(fetch->deferCallback != NULL)
+			if(fetch->deferCallback != NULL){
+				TCL_String *old = fetch;
 				((TCL_DEFER_CBack)(fetch->deferCallback))(&fetch);
+				_tcl_move_string_arena(&(ctx->arena),old,fetch);
+				_tcl_set_move_scope(&(ctx->scope),varStr,fetch);
+			}
 			free(varStr);
 			tcl_string_cp(&outStr,fetch);
 			//free(fetch);

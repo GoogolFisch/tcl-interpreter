@@ -96,6 +96,8 @@ expr_token_append:
 			if(state >= '0' && state <= '9') state = '0';
 			if(state == '$'){
 				expr->expr[exprOff].str.tags = TCL_ST_Variable;
+				expr->expr[exprOff].str.length--;
+				expr->expr[exprOff].str.offset++;
 			}
 			//if(state == '.') state = '.';
 		}
@@ -319,12 +321,12 @@ void exprResolveDefer(TCL_String **strptr){
 				var.var.gmpz);
 	}
 	else if((*strptr)->var.typ == NUMBERT_Gmpq){
-		vcap = gmp_asprintf((char**)strptr,"%0*i%Qd",
+		vcap = gmp_asprintf((char**)strptr,"%0*i%Qx",
 				(int)sizeof(TCL_String),0,
 				var.var.gmpq);
 	}
 	else if((*strptr)->var.typ == NUMBERT_Gmpf){
-		vcap = gmp_asprintf((char**)strptr,"%0*i%Fd",
+		vcap = gmp_asprintf((char**)strptr,"%0*i%Ff",
 				(int)sizeof(TCL_String),0,
 				var.var.gmpf);
 	}
@@ -411,11 +413,6 @@ TCL_String *exprFunction(TCLR_Context **ctx,TCLS_Cmd *cmd){
 		}
 		if(idx < exprPtr->length){
 			TCL_Number num = exprTokenInterpret(*ctx,exprPtr,idx);
-/*
-	if(outStr != NULL)
-		tcl_set_string_arena(&(ctx->arena),outStr);
-		*/
-			// TODO FIXME do string stuff!
 			outStr = exprGetString(&num);
 			tcl_set_string_arena(&((*ctx)->arena),outStr);
 		}

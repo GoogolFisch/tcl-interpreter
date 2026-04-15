@@ -128,6 +128,7 @@ TCL_String *tcl_create_string(int32_t length,char *data){
 	TCL_String *strOut = malloc(sizeof(TCL_String) +
 			sizeof(char) * length);
 	strOut->length = length;
+	strOut->var.typ = 0;
 	strOut->capacity = length;
 	strOut->refs = 0;
 	for(int32_t idx = 0;idx < length;idx++)
@@ -162,6 +163,29 @@ void tcl_set_into_scope(TCL_Scope **stringScope,
 		return;
 	}
 	// insert
+	tcl_insert_into_scope(stringScope,key,value);
+}
+void _tcl_set_move_scope(TCL_Scope **stringScope,
+		TCL_String *key,TCL_String *value){
+	// test if it's there
+	TCL_Scope *scope = *stringScope;
+	TCL_String *oldValue = NULL;
+	int idx;
+	size_t hash = tcl_hash_string(key);
+	for(idx = 0;idx < scope->length;idx++){
+		if(scope->kv[idx].kHash != hash)continue;
+		if(!tcl_string_eq(scope->kv[idx].key,key))
+			continue;
+		oldValue = scope->kv[idx].value;
+	}
+	// swap values
+	if(oldValue != NULL){
+		//oldValue->refs--;
+		scope->kv[idx].value = value;
+		value->refs++;
+		return;
+	}
+	// should error?
 	tcl_insert_into_scope(stringScope,key,value);
 }
 void tcl_insert_into_scope(TCL_Scope **stringScope,
@@ -235,13 +259,13 @@ TCL_StringArena *tcl_create_string_arena(void){
 void tcl_set_string_arena(TCL_StringArena **stringArena,TCL_String *string){
 	if(string->refs & TCL_STRING_REFS_FLAG(string->refs))
 		return;
-//
+/* /
 	for(int32_t idx = 0;idx < (*stringArena)->length;idx++){
 		if((*stringArena)->string[idx] == string){
 			return;
 		}
 	}
-//
+//  */
 	string->refs |= TCL_STRING_REFS_FLAG(string->refs);
 	if((*stringArena)->length >= (*stringArena)->capacity){
 		(*stringArena)->capacity *= 2;
@@ -267,6 +291,17 @@ void tcl_garbage_collect_string_arena(TCL_StringArena **stringArena){
 		free(string);
 		idx--;
 	}
+}
+void _tcl_move_string_arena(TCL_StringArena **stringArena,
+		TCL_String *old,TCL_String *nstr){
+	for(int32_t idx = 0;idx < (*stringArena)->length;idx++){
+		if((*stringArena)->string[idx] == old){
+			(*stringArena)->string[idx] = nstr;
+			return;
+		}
+	}
+	// TODO should error here?
+	tcl_set_string_arena(stringArena,nstr);
 }
 #undef TCL_STRING_REFS_FLAG
 
