@@ -4,6 +4,7 @@
 
 #include<stdlib.h>
 #include<stdint.h>
+#include<gmp.h>
 
 // ======== DEFINES
 #define TCL_MIN_CAPACITY 128
@@ -11,9 +12,24 @@
 #define TCLR_STACK_SIZE 64
 
 // ======== structs
-union TCL_Combined{
-	int32_t nInt;
-	float nFloat;
+enum TCL_NumTypes{
+	NUMBERT_None    =   0,
+	NUMBERT_Float   =   1,
+	NUMBERT_Gmpz    =   2,
+	NUMBERT_Gmpq    =   3,
+	NUMBERT_Gmpf    =   4,
+	NUMBERT_Mask    =  63,
+	NUMBERT_DO_FREE = 128,
+};
+union TCL_NumCombine{
+	mpz_t gmpz;
+	mpq_t gmpq;
+	mpf_t gmpf;
+	float flt;
+};
+struct TCL_Number{
+	union TCL_NumCombine var;
+	enum TCL_NumTypes typ;
 };
 
 enum TCL_String_Tags{
@@ -24,7 +40,7 @@ enum TCL_String_Tags{
 
 	TCL_ST_Int = 64,
 	TCL_ST_Quot = 128,
-	TCL_ST_Reals = 192,
+	TCL_ST_Float = 192,
 };
 
 // should be immutable when refs > 1?
@@ -32,7 +48,7 @@ struct TCL_String{
 	int32_t refs;
 	int32_t tags;
 	int32_t length;
-	void *gmp;
+	struct TCL_Number var;
 	int32_t capacity;
 	uint8_t data[];
 };
@@ -132,6 +148,9 @@ struct TCLR_Context{
 };
 
 // ========== typedefs
+typedef enum TCL_NumTypes TCL_NumTypes;
+typedef union TCL_NumCombine TCL_NumCombine;
+typedef struct TCL_Number TCL_Number;
 // 
 typedef struct TCL_String TCL_String;
 typedef struct TCL_Slice TCL_Slice;
@@ -150,5 +169,6 @@ typedef enum TCLR_FLAGS TCLR_FLAGS;
 typedef struct TCLR_Context TCLR_Context;
 // ======= fn typdef
 typedef TCL_String*(*TCLF_NAT_Fn)(TCLR_Context **ctx,TCLS_Cmd *cmd);
+
 
 #endif

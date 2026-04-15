@@ -2,6 +2,10 @@
 #ifndef FUNC_CORE_EXPR_H_
 #define FUNC_CORE_EXPR_H_
 
+#include<gmp.h>
+#include<math.h>
+#include<stdint.h>
+
 enum EXPR_LIST_Flags{
 	EXPR_LISTF_FREE = 0,
 	EXPR_LISTF_USED = 1,
@@ -191,11 +195,22 @@ int32_t exprTokenOverList(TCLCORE_Expr *exprList,
 	
 	return 0;
 }
-TCL_String *exprTokenInterpret(TCLR_Context *ctx,TCLCORE_Expr *exprList,
+void _exprNumberMayFree(TCL_Number *num){
+	if(!(num->typ & NUMBERT_DO_FREE))
+		return;
+	if((num->typ & NUMBERT_Mask) == NUMBERT_Gmpz)
+		mpz_clear(num->var.gmpz);
+	if((num->typ & NUMBERT_Mask) == NUMBERT_Gmpq)
+		mpq_clear(num->var.gmpq);
+	if((num->typ & NUMBERT_Mask) == NUMBERT_Gmpf)
+		mpf_clear(num->var.gmpf);
+}
+TCL_Number exprTokenInterpret(TCLR_Context *ctx,TCLCORE_Expr *exprList,
 		int32_t idx){
-	TCL_String *outStr = NULL;
+	TCL_Number outNum = (TCL_Number){0};
+	outNum.typ = NUMBERT_DO_FREE;
 	if(idx == -1)
-		return outStr;
+		return outNum;
 	TCL_Slice *slc = &(exprList->expr[idx].str);
 	if(slc->tags == TCL_ST_Variable){
 		/*
@@ -207,21 +222,84 @@ TCL_String *exprTokenInterpret(TCLR_Context *ctx,TCLCORE_Expr *exprList,
 		};
 		outStr = tcl_get_from_scope_slice(&(ctx->scope),vslice);
 		//  */
-		outStr = tcl_get_from_scope_slice(&(ctx->scope),slc);
-		return outStr;
+		TCL_String *outStr = tcl_get_from_scope_slice(&(ctx->scope),slc);
+		return outStr->var;
 	}
-	TCL_String *left  = exprTokenInterpret(ctx,exprList,exprList->expr[idx].left );
-	TCL_String *right = exprTokenInterpret(ctx,exprList,exprList->expr[idx].right);
-	if(slc->string->data[slc->offset] == '*'){
-	
+	TCL_Number left  = exprTokenInterpret(ctx,exprList,exprList->expr[idx].left );
+	TCL_Number right = exprTokenInterpret(ctx,exprList,exprList->expr[idx].right);
+	if((left.typ & NUMBERT_Mask) == NUMBERT_Gmpz &&
+			(right.typ & NUMBERT_Mask) == NUMBERT_Float){
+		left.typ |= NUMBERT_Float;
+		float lft = (float)mpz_get_d(left.var.gmpz);
+		mpz_clear(left.var.gmpz); // wtf, how do I do this?
+		left.var.flt = lft;
+		//left->
 	}
-	left = left;
-	right = right;
+	if((left.typ & NUMBERT_Mask) == NUMBERT_Float &&
+			(right.typ & NUMBERT_Mask) == NUMBERT_Gmpz){
+		//right->
+		right.typ |= NUMBERT_Float;
+		float rft = (float)mpz_get_d(right.var.gmpz);
+		mpz_clear(right.var.gmpz);
+		right.var.flt = rft;
+	}
+	//
+	if(slc->string->data[slc->offset] == '+'){
+		if(left.typ & NUMBERT_Gmpz && right.typ & NUMBERT_Gmpz){
+			mpz_add(outNum.var.gmpz,left.var.gmpz,right.var.gmpz);
+			outNum.typ = NUMBERT_Gmpz;
+		}
+		if(left.typ & NUMBERT_Float && right.typ & NUMBERT_Float){
+			outNum.var.flt = left.var.flt + right.var.flt;
+			outNum.typ = NUMBERT_Float;
+		}
+	}
+	else if(slc->string->data[slc->offset] == '-'){
+		if(left.typ & NUMBERT_Gmpz && right.typ & NUMBERT_Gmpz){
+			mpz_sub(outNum.var.gmpz,left.var.gmpz,right.var.gmpz);
+			outNum.typ = NUMBERT_Gmpz;
+		}
+		if(left.typ & NUMBERT_Float && right.typ & NUMBERT_Float){
+			outNum.var.flt = left.var.flt - right.var.flt;
+			outNum.typ = NUMBERT_Float;
+		}
+	}
+	else if(slc->string->data[slc->offset] == '*'){
+		if(left.typ & NUMBERT_Gmpz && right.typ & NUMBERT_Gmpz){
+			mpz_mul(outNum.var.gmpz,left.var.gmpz,right.var.gmpz);
+			outNum.typ = NUMBERT_Gmpz;
+		}
+		if(left.typ & NUMBERT_Float && right.typ & NUMBERT_Float){
+			outNum.var.flt = left.var.flt * right.var.flt;
+			outNum.typ = NUMBERT_Float;
+		}
+	}
+	else if(slc->string->data[slc->offset] == '/'){
+		if(left.typ & NUMBERT_Gmpz && right.typ & NUMBERT_Gmpz){
+			mpz_divexact(outNum.var.gmpz,left.var.gmpz,right.var.gmpz);
+			outNum.typ = NUMBERT_Gmpz;
+		}
+		if(left.typ & NUMBERT_Float && right.typ & NUMBERT_Float){
+			outNum.var.flt = left.var.flt / right.var.flt;
+			outNum.typ = NUMBERT_Float;
+		}
+	}
+	else if(slc->string->data[slc->offset] == '%'){
+		if(left.typ & NUMBERT_Gmpz && right.typ & NUMBERT_Gmpz){
+			mpz_mod(outNum.var.gmpz,left.var.gmpz,right.var.gmpz);
+			outNum.typ = NUMBERT_Gmpz;
+		}
+		if(left.typ & NUMBERT_Float && right.typ & NUMBERT_Float){
+			outNum.var.flt = fmodf(left.var.flt,right.var.flt);
+			outNum.typ = NUMBERT_Float;
+		}
+	}
 
+	//
+	_exprNumberMayFree(&left);
+	_exprNumberMayFree(&right);
 
-	if(outStr != NULL)
-		tcl_set_string_arena(&(ctx->arena),outStr);
-	return outStr;
+	return outNum;
 }
 
 
@@ -280,7 +358,16 @@ TCL_String *exprFunction(TCLR_Context **ctx,TCLS_Cmd *cmd){
 			if(exprPtr->expr[idx].flags == EXPR_LISTF_FREE)break;
 		}
 		if(idx < exprPtr->length){
-			outStr = exprTokenInterpret(*ctx,exprPtr,idx);
+			TCL_Number num = exprTokenInterpret(*ctx,exprPtr,idx);
+/*
+	if(outStr != NULL)
+		tcl_set_string_arena(&(ctx->arena),outStr);
+		*/
+			// TODO FIXME do string stuff!
+			outStr = malloc(sizeof(TCL_String) +
+					sizeof(char) * 100);
+			num = num;
+			tcl_set_string_arena(&((*ctx)->arena),outStr);
 		}
 	}
 	// make this compute stuff!
