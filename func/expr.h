@@ -207,6 +207,41 @@ void _exprNumberMayFree(TCL_Number *num){
 	if((num->typ & NUMBERT_Mask) == NUMBERT_Gmpf)
 		mpf_clear(num->var.gmpf);
 }
+int32_t _exprParseString(TCL_String *str,TCL_Number *num,int32_t flag){
+	char state = 0;
+	int offset = 0;
+	if(str->length <= offset)
+		return 1;
+	if(str->data[offset] == '-'){
+		offset++;
+	}
+	if(str->length <= offset)
+		return 1;
+	while(str->length > offset){
+		// don't care about whitespaces
+		if(str->data[offset] == ' ')continue;
+		else if(str->data[offset] == '\n')continue;
+		else if(str->data[offset] == '\t')continue;
+		else if(str->data[offset] == '\r')continue;
+		else if(state == '.' && str->data[offset] == '.')
+			return 1;
+		else if(state == '0' && str->data[offset] == '.')
+			state = '.';
+		else if(state == '.' && str->data[offset] >= '0' &&
+					str->data[offset] <= '9')
+			state = '.';
+		else if(state == '0' && str->data[offset] >= '0' &&
+					str->data[offset] <= '9')
+			state = '0';
+		else return 1;
+		offset++;
+	}
+	num = num;
+	flag = flag;
+	// TODO
+
+	return 0;
+}
 TCL_Number exprTokenInterpret(TCLR_Context *ctx,TCLCORE_Expr *exprList,
 		int32_t idx){
 	TCL_Number outNum = (TCL_Number){0};
@@ -225,6 +260,9 @@ TCL_Number exprTokenInterpret(TCLR_Context *ctx,TCLCORE_Expr *exprList,
 		outStr = tcl_get_from_scope_slice(&(ctx->scope),vslice);
 		//  */
 		TCL_String *outStr = tcl_get_from_scope_slice(&(ctx->scope),slc);
+		if((outStr->var.typ & NUMBERT_Mask) != NUMBERT_None)
+			return outStr->var;
+		_exprParseString(outStr,&(outStr->var),0);
 		return outStr->var;
 	}
 	TCL_Number left  = exprTokenInterpret(ctx,exprList,exprList->expr[idx].left );
@@ -309,31 +347,37 @@ void exprResolveDefer(TCL_String **strptr){
 	int32_t tags = (*strptr)->tags;
 	//tags &= ~TCL_ST_Defer;
 	struct TCL_Number var = (*strptr)->var;
-	int32_t vcap;
-	if((*strptr)->var.typ == NUMBERT_Float){
+	int32_t vcap = -1;
+	if(((*strptr)->var.typ & NUMBERT_Mask) == NUMBERT_Float){
 		vcap = asprintf((char**)strptr,"%0*i%f",
 				(int)sizeof(TCL_String),0,
 				var.var.flt);
 	}
-	else if((*strptr)->var.typ == NUMBERT_Gmpz){
+	else if(((*strptr)->var.typ & NUMBERT_Mask) == NUMBERT_Gmpz){
 		vcap = gmp_asprintf((char**)strptr,"%0*i%Zd",
 				(int)sizeof(TCL_String),0,
 				var.var.gmpz);
 	}
-	else if((*strptr)->var.typ == NUMBERT_Gmpq){
+	else if(((*strptr)->var.typ & NUMBERT_Mask) == NUMBERT_Gmpq){
 		vcap = gmp_asprintf((char**)strptr,"%0*i%Qx",
 				(int)sizeof(TCL_String),0,
 				var.var.gmpq);
 	}
-	else if((*strptr)->var.typ == NUMBERT_Gmpf){
+	else if(((*strptr)->var.typ & NUMBERT_Mask) == NUMBERT_Gmpf){
 		vcap = gmp_asprintf((char**)strptr,"%0*i%Ff",
 				(int)sizeof(TCL_String),0,
 				var.var.gmpf);
 	}
+	(*strptr)->deferCallback = NULL;
+	if((*strptr)->var.typ & NUMBERT_DO_FREE){
+		//free((*strptr)->var.
+	}
+	if(vcap == -1){
+		return;
+	}
 	(*strptr)->capacity = vcap - sizeof(TCL_String) + 1;
 	(*strptr)->length = vcap - sizeof(TCL_String);
 	(*strptr)->refs = refs;
-	(*strptr)->deferCallback = NULL;
 	(*strptr)->tags = tags;
 	(*strptr)->var = var;
 }
@@ -418,7 +462,11 @@ TCL_String *exprFunction(TCLR_Context **ctx,TCLS_Cmd *cmd){
 		}
 	}
 	// make this compute stuff!
-	if(cmd->arguments[0]->tags == TCL_ST_None && !error)
+	if(
+			cmd->arguments[0]->tags == TCL_ST_None &&
+			cmd->command->tags == TCL_ST_None &&
+			!error
+	)
 		cmd->moreData = exprPtr;
 	else{
 		cmd->moreData = NULL;

@@ -80,6 +80,7 @@ TCL_String *tclr_get_var_slice(TCL_String *str,int32_t *index){
 	outStr = malloc(sizeof(TCL_String) +
 			sizeof(char) * TCL_MIN_CAPACITY);
 	outStr->var.typ = 0;
+	outStr->deferCallback = NULL;
 	outStr->capacity = TCL_MIN_CAPACITY;
 	outStr->length = 0;
 	outStr->refs = 0;
@@ -115,6 +116,7 @@ TCL_String *tclr_compile_str(TCLR_Context *ctx,int32_t *stack,TCL_String *base){
 	TCL_String *outStr = malloc(sizeof(TCL_String) + sizeof(char) * base->length);
 	outStr->length = 0;
 	outStr->var.typ = 0;
+	outStr->deferCallback = NULL;
 	outStr->capacity = base->length;
 	outStr->refs = 0;
 	outStr->tags = 0;
@@ -130,6 +132,10 @@ TCL_String *tclr_compile_str(TCLR_Context *ctx,int32_t *stack,TCL_String *base){
 			strIdx++;
 			if(stStr == NULL)
 				continue;
+			if(base->length == 2){
+				free(outStr);
+				return ctx->parseStack[(*stack) - 1];
+			}
 			tcl_string_cp(&outStr,stStr);
 			stStr->refs--;
 			continue;

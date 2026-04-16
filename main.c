@@ -84,6 +84,7 @@ void setFn(TCLR_Context **ctx,TCLS_Cmd *cmd){
 #define makeStr(var,msg) TCL_String *var;                                      \
  var = malloc(sizeof(TCL_String) + sizeof(char) * sizeof(msg));                \
  var->var.typ = 0;                                                             \
+ var->deferCallback = NULL;                                                    \
  var->capacity = sizeof(msg);                                                  \
  var->length = sizeof(msg) - 1;                                                \
  for(int32_t __var_o = 0;__var_o < (int32_t)sizeof(msg);__var_o++){            \

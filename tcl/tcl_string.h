@@ -160,6 +160,7 @@ static TCL_String *_tcls_make_string_from_bound(uint8_t str[],
 	TCL_String *strOut = malloc(sizeof(TCL_String) +
 			sizeof(char) * (upper - lower));
 	strOut->var.typ = 0;
+	strOut->deferCallback = NULL;
 	strOut->refs = 0;
 	strOut->tags = 0;
 	strOut->capacity = upper - lower;
@@ -260,6 +261,7 @@ static TCL_String *_tcls_var_mkString(TCL_StringArena **stringArena,
 	cc->capacity = ending - *index;
 	cc->tags = TCL_ST_Variable;
 	cc->var.typ = 0;
+	cc->deferCallback = NULL;
 	cc->refs = 0;
 	cc->length = 0;
 	//TCL_String *cc = tcls_string_from_array(
@@ -396,6 +398,7 @@ static TCL_String *_tcls_cmd_get_string(TCLS_Commands **cmd,TCL_String *str,
 	//
 	outStr = malloc(sizeof(TCL_String) + sizeof(char) * (ending - start));
 	outStr->var.typ = 0;
+	outStr->deferCallback = NULL;
 	char startChar = str->data[*strIdx];
 	if(startChar == '"'){start++;ending--;}
 	int32_t beg;

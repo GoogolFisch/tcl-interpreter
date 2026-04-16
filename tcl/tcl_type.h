@@ -129,6 +129,7 @@ TCL_String *tcl_create_string(int32_t length,char *data){
 			sizeof(char) * length);
 	strOut->length = length;
 	strOut->var.typ = 0;
+	strOut->deferCallback = NULL;
 	strOut->capacity = length;
 	strOut->refs = 0;
 	for(int32_t idx = 0;idx < length;idx++)
@@ -182,7 +183,7 @@ void _tcl_set_move_scope(TCL_Scope **stringScope,
 	if(oldValue != NULL){
 		//oldValue->refs--;
 		scope->kv[idx].value = value;
-		value->refs++;
+		//value->refs++;
 		return;
 	}
 	// should error?
