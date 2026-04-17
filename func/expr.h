@@ -207,31 +207,36 @@ void _exprNumberMayFree(TCL_Number *num){
 	if((num->typ & NUMBERT_Mask) == NUMBERT_Gmpf)
 		mpf_clear(num->var.gmpf);
 }
-int32_t _exprParseString(TCL_String *str,TCL_Number *num,int32_t flag){
-	char state = 0;
+//flag == 0 => normal expr, flag == 1 => gmp
+int32_t _exprParseString(TCL_Slice slc,TCL_Number *num,int32_t flag){
+	TCL_String *str = slc.string;
+	char *strStart = (char*)&(slc.string->data[slc.offset]);
+	char state = '0';
 	int offset = 0;
 	if(str->length <= offset)
 		return 1;
-	if(str->data[offset] == '-'){
+	if(strStart[offset] == '-'){
 		offset++;
 	}
-	if(str->length <= offset)
+	if(slc.length <= offset)
 		return 1;
-	while(str->length > offset){
+	while(slc.length > offset){
 		// don't care about whitespaces
-		if(str->data[offset] == ' ')continue;
-		else if(str->data[offset] == '\n')continue;
-		else if(str->data[offset] == '\t')continue;
-		else if(str->data[offset] == '\r')continue;
-		else if(state == '.' && str->data[offset] == '.')
+		if(((uint8_t)strStart[offset]) <= ' ')continue;
+		else if(state == '.' && strStart[offset] == '.')
 			return 1;
-		else if(state == '0' && str->data[offset] == '.')
+		else if(state == '0' && strStart[offset] == '.')
 			state = '.';
-		else if(state == '.' && str->data[offset] >= '0' &&
-					str->data[offset] <= '9')
+		else if(state == '0' && strStart[offset] == '/' && flag > 0)
+			state = '/';
+		else if(state == '.' && strStart[offset] >= '0' &&
+					strStart[offset] <= '9')
 			state = '.';
-		else if(state == '0' && str->data[offset] >= '0' &&
-					str->data[offset] <= '9')
+		else if(state == '/' && strStart[offset] >= '0' &&
+					strStart[offset] <= '9')
+			state = '/';
+		else if(state == '0' && strStart[offset] >= '0' &&
+					strStart[offset] <= '9')
 			state = '0';
 		else return 1;
 		offset++;
@@ -239,6 +244,32 @@ int32_t _exprParseString(TCL_String *str,TCL_Number *num,int32_t flag){
 	num = num;
 	flag = flag;
 	// TODO
+	char upper = strStart[offset];
+	strStart[offset] = 0; // this is a bad thing!
+	if(flag == 0){
+		if(state == '0'){
+			mpz_init_set_str(num->var.gmpz,strStart,10);
+			num->typ = NUMBERT_Gmpz;
+		} else if(state == '.'){ // this is funny
+			char getFlt[64];
+			snprintf(getFlt,sizeof(getFlt) - 1,"%%%df",offset);
+			sscanf(strStart,getFlt,offset,&(num->var.flt));
+			num->typ = NUMBERT_Float;
+		}
+	}else if(flag == 1){
+		if(state == '0'){
+			mpz_init_set_str(num->var.gmpz,strStart,10);
+			num->typ = NUMBERT_Gmpz;
+		} else if(state == '.'){
+			mpf_init_set_str(num->var.gmpf,strStart,10);
+			num->typ = NUMBERT_Gmpf;
+		} else if(state == '/'){
+			mpq_init(num->var.gmpq);
+			mpq_set_str(num->var.gmpq,strStart,10);
+			num->typ = NUMBERT_Gmpq;
+		}
+	}
+	strStart[offset] = upper;
 
 	return 0;
 }
@@ -262,7 +293,12 @@ TCL_Number exprTokenInterpret(TCLR_Context *ctx,TCLCORE_Expr *exprList,
 		TCL_String *outStr = tcl_get_from_scope_slice(&(ctx->scope),slc);
 		if((outStr->var.typ & NUMBERT_Mask) != NUMBERT_None)
 			return outStr->var;
-		_exprParseString(outStr,&(outStr->var),0);
+		TCL_Slice slc = (TCL_Slice){
+			.refs = -1, .tags = 0,
+			.offset = 0, .length = outStr->length,
+			.string = outStr
+		};
+		_exprParseString(slc,&(outStr->var),0);
 		return outStr->var;
 	}
 	TCL_Number left  = exprTokenInterpret(ctx,exprList,exprList->expr[idx].left );
