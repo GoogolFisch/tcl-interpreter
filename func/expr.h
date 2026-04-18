@@ -384,24 +384,26 @@ void exprResolveDefer(TCL_String **strptr){
 	//tags &= ~TCL_ST_Defer;
 	struct TCL_Number var = (*strptr)->var;
 	int32_t vcap = -1;
+	// why gcc why is it an int32_t larger?
+	size_t sz = sizeof(TCL_String) - sizeof(int32_t);
 	if(((*strptr)->var.typ & NUMBERT_Mask) == NUMBERT_Float){
 		vcap = asprintf((char**)strptr,"%0*i%f",
-				(int)sizeof(TCL_String),0,
+				(int)sz,0,
 				var.var.flt);
 	}
 	else if(((*strptr)->var.typ & NUMBERT_Mask) == NUMBERT_Gmpz){
 		vcap = gmp_asprintf((char**)strptr,"%0*i%Zd",
-				(int)sizeof(TCL_String),0,
+				(int)sz,0,
 				var.var.gmpz);
 	}
 	else if(((*strptr)->var.typ & NUMBERT_Mask) == NUMBERT_Gmpq){
 		vcap = gmp_asprintf((char**)strptr,"%0*i%Qx",
-				(int)sizeof(TCL_String),0,
+				(int)sz,0,
 				var.var.gmpq);
 	}
 	else if(((*strptr)->var.typ & NUMBERT_Mask) == NUMBERT_Gmpf){
 		vcap = gmp_asprintf((char**)strptr,"%0*i%Ff",
-				(int)sizeof(TCL_String),0,
+				(int)sz,0,
 				var.var.gmpf);
 	}
 	(*strptr)->deferCallback = NULL;
@@ -411,8 +413,8 @@ void exprResolveDefer(TCL_String **strptr){
 	if(vcap == -1){
 		return;
 	}
-	(*strptr)->capacity = vcap - sizeof(TCL_String) + 1;
-	(*strptr)->length = vcap - sizeof(TCL_String);
+	(*strptr)->capacity = vcap - sz + 1;
+	(*strptr)->length = vcap - sz;
 	(*strptr)->refs = refs;
 	(*strptr)->tags = tags;
 	(*strptr)->var = var;
