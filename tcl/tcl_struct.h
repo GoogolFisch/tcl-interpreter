@@ -51,6 +51,7 @@ struct TCL_String{
 	int32_t length;
 	struct TCL_Number var;
 	void *deferCallback;
+	void *freeCallback;
 	int32_t capacity;
 	uint8_t data[];
 };
@@ -171,7 +172,7 @@ typedef enum TCLR_FLAGS TCLR_FLAGS;
 typedef struct TCLR_Context TCLR_Context;
 // ======= fn typdef
 typedef TCL_String*(*TCLF_NAT_Fn)(TCLR_Context **ctx,TCLS_Cmd *cmd);
-typedef void(*TCL_DEFER_CBack)(TCL_String **str);
+typedef void(*TCL_DEFER_CBack)(TCL_String **str); // also for free
 
 
 #endif

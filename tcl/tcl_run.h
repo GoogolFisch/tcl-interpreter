@@ -81,6 +81,7 @@ TCL_String *tclr_get_var_slice(TCL_String *str,int32_t *index){
 			sizeof(char) * TCL_MIN_CAPACITY);
 	outStr->var.typ = 0;
 	outStr->deferCallback = NULL;
+	outStr->freeCallback = NULL;
 	outStr->capacity = TCL_MIN_CAPACITY;
 	outStr->length = 0;
 	outStr->refs = 0;
@@ -117,6 +118,7 @@ TCL_String *tclr_compile_str(TCLR_Context *ctx,int32_t *stack,TCL_String *base){
 	outStr->length = 0;
 	outStr->var.typ = 0;
 	outStr->deferCallback = NULL;
+	outStr->freeCallback = NULL;
 	outStr->capacity = base->length;
 	outStr->refs = 0;
 	outStr->tags = 0;
@@ -153,12 +155,13 @@ TCL_String *tclr_compile_str(TCLR_Context *ctx,int32_t *stack,TCL_String *base){
 				continue;
 			}
 			if(fetch->deferCallback != NULL){
-				TCL_String *old = fetch;
+				//TCL_String *old = fetch;
+				//old->refs--;
 				((TCL_DEFER_CBack)(fetch->deferCallback))(&fetch);
-				_tcl_move_string_arena(&(ctx->arena),old,fetch);
-				_tcl_set_move_scope(&(ctx->scope),varStr,fetch);
+				tcl_set_string_arena(&(ctx->arena),fetch);
+				tcl_set_into_scope(&(ctx->scope),varStr,fetch);
 			}
-			free(varStr);
+			else free(varStr);
 			tcl_string_cp(&outStr,fetch);
 			//free(fetch);
 			strIdx = ofVar;
@@ -261,6 +264,11 @@ void tclr_step_instruction(TCLR_Context **ctx_ptr){
 		}
 		returned = ((TCLF_NAT_Fn)(fnIdx->natFn))(ctx_ptr,execCmd);
 		curCmd->moreData = execCmd->moreData;
+		if(curCmd->command->tags == TCL_ST_Variable &&
+				fnIdx->freeFn != NULL){
+			((TCLF_NAT_Fn)(fnIdx->freeFn))(ctx_ptr,execCmd);
+			curCmd->moreData = NULL;
+		}
 	}else if(fnIdx->flags == TCLF_FN_PROC){
 		TCLR_Context *lowCtx = tclr_make_context(ctx,TCLR_FULL_LAYER);
 		// TODO add argument parsing!

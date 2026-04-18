@@ -130,6 +130,7 @@ TCL_String *tcl_create_string(int32_t length,char *data){
 	strOut->length = length;
 	strOut->var.typ = 0;
 	strOut->deferCallback = NULL;
+	strOut->freeCallback = NULL;
 	strOut->capacity = length;
 	strOut->refs = 0;
 	for(int32_t idx = 0;idx < length;idx++)
@@ -155,6 +156,7 @@ void tcl_set_into_scope(TCL_Scope **stringScope,
 		if(!tcl_string_eq(scope->kv[idx].key,key))
 			continue;
 		oldValue = scope->kv[idx].value;
+		break;
 	}
 	// swap values
 	if(oldValue != NULL){
@@ -287,6 +289,8 @@ void tcl_garbage_collect_string_arena(TCL_StringArena **stringArena){
 			*(int32_t*)NULL = 0;
 		}
 		if(refs)continue;
+		if(string->freeCallback != NULL)
+			((TCL_DEFER_CBack)(string->freeCallback))(&string);
 		arena->string[idx] = arena->string[arena->length - 1];
 		arena->length--;
 		free(string);

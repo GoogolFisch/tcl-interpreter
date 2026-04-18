@@ -207,6 +207,10 @@ void _exprNumberMayFree(TCL_Number *num){
 	if((num->typ & NUMBERT_Mask) == NUMBERT_Gmpf)
 		mpf_clear(num->var.gmpf);
 }
+void _exprFreeDefer(TCL_String **str){
+	(*str)->var.typ &= ~NUMBERT_DO_FREE;
+	_exprNumberMayFree(&((*str)->var));
+}
 //flag == 0 => normal expr, flag == 1 => gmp
 int32_t _exprParseString(TCL_Slice slc,TCL_Number *num,int32_t flag){
 	TCL_String *str = slc.string;
@@ -385,7 +389,7 @@ void exprResolveDefer(TCL_String **strptr){
 	struct TCL_Number var = (*strptr)->var;
 	int32_t vcap = -1;
 	// why gcc why is it an int32_t larger?
-	size_t sz = sizeof(TCL_String) - sizeof(int32_t);
+	int32_t sz = (int32_t)(sizeof(TCL_String) - sizeof(int32_t));
 	if(((*strptr)->var.typ & NUMBERT_Mask) == NUMBERT_Float){
 		vcap = asprintf((char**)strptr,"%0*i%f",
 				(int)sz,0,
@@ -413,9 +417,11 @@ void exprResolveDefer(TCL_String **strptr){
 	if(vcap == -1){
 		return;
 	}
+	//(*strptr)->freeCallback = _exprDeferFree;
+	(*strptr)->freeCallback = NULL;
 	(*strptr)->capacity = vcap - sz + 1;
 	(*strptr)->length = vcap - sz;
-	(*strptr)->refs = refs;
+	(*strptr)->refs = refs & ~0xffffff;
 	(*strptr)->tags = tags;
 	(*strptr)->var = var;
 }
@@ -428,6 +434,7 @@ TCL_String *exprGetString(TCL_Number *num){
 	strOut->capacity = 0;
 	strOut->refs = 0;
 	strOut->deferCallback = (void*)exprResolveDefer;
+	strOut->freeCallback = (void*)_exprFreeDefer;
 	strOut->tags = 0;//TLC_ST_Defer;
 	/*
 	if((num->typ & NUMBERT_Mask) == NUMBERT_Gmpz);
@@ -468,7 +475,7 @@ TCL_String *exprFunctionFree(TCLR_Context **ctx,TCLS_Cmd *cmd){
 TCL_String *exprFunction(TCLR_Context **ctx,TCLS_Cmd *cmd){
 	ctx = ctx;
 	// proc {name} {args} {body}
-	printf("fn %.*s\n",cmd->command->length,cmd->command->data);
+	printf("free %.*s\n",cmd->command->length,cmd->command->data);
 	for(int32_t i = 0;i < cmd->length;i++){
 		printf("- %.*s\n",cmd->arguments[i]->length,cmd->arguments[i]->data);
 	}
