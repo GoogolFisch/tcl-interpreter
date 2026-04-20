@@ -303,13 +303,14 @@ TCL_Number exprTokenInterpret(TCLR_Context *ctx,TCLCORE_Expr *exprList,
 			.string = outStr
 		};
 		_exprParseString(slc,&(outStr->var),0);
+		outStr->freeCallback = (void*)_exprFreeDefer;
 		return outStr->var;
 	}
 	TCL_Number left  = exprTokenInterpret(ctx,exprList,exprList->expr[idx].left );
 	TCL_Number right = exprTokenInterpret(ctx,exprList,exprList->expr[idx].right);
 	if((left.typ & NUMBERT_Mask) == NUMBERT_Gmpz &&
 			(right.typ & NUMBERT_Mask) == NUMBERT_Float){
-		left.typ |= NUMBERT_Float;
+		left.typ = (left.typ & ~NUMBERT_Mask) | NUMBERT_Float;
 		float lft = (float)mpz_get_d(left.var.gmpz);
 		mpz_clear(left.var.gmpz); // wtf, how do I do this?
 		left.var.flt = lft;
@@ -318,7 +319,7 @@ TCL_Number exprTokenInterpret(TCLR_Context *ctx,TCLCORE_Expr *exprList,
 	if((left.typ & NUMBERT_Mask) == NUMBERT_Float &&
 			(right.typ & NUMBERT_Mask) == NUMBERT_Gmpz){
 		//right->
-		right.typ |= NUMBERT_Float;
+		right.typ = (right.typ & ~NUMBERT_Mask) | NUMBERT_Float;
 		float rft = (float)mpz_get_d(right.var.gmpz);
 		mpz_clear(right.var.gmpz);
 		right.var.flt = rft;
@@ -327,7 +328,7 @@ TCL_Number exprTokenInterpret(TCLR_Context *ctx,TCLCORE_Expr *exprList,
 	if(slc->string->data[slc->offset] == '+'){
 		if(left.typ & NUMBERT_Gmpz && right.typ & NUMBERT_Gmpz){
 			mpz_add(outNum.var.gmpz,left.var.gmpz,right.var.gmpz);
-			outNum.typ = NUMBERT_Gmpz;
+			outNum.typ = NUMBERT_Gmpz | NUMBERT_DO_FREE;
 		}
 		if(left.typ & NUMBERT_Float && right.typ & NUMBERT_Float){
 			outNum.var.flt = left.var.flt + right.var.flt;
@@ -337,7 +338,7 @@ TCL_Number exprTokenInterpret(TCLR_Context *ctx,TCLCORE_Expr *exprList,
 	else if(slc->string->data[slc->offset] == '-'){
 		if(left.typ & NUMBERT_Gmpz && right.typ & NUMBERT_Gmpz){
 			mpz_sub(outNum.var.gmpz,left.var.gmpz,right.var.gmpz);
-			outNum.typ = NUMBERT_Gmpz;
+			outNum.typ = NUMBERT_Gmpz | NUMBERT_DO_FREE;
 		}
 		if(left.typ & NUMBERT_Float && right.typ & NUMBERT_Float){
 			outNum.var.flt = left.var.flt - right.var.flt;
@@ -347,7 +348,7 @@ TCL_Number exprTokenInterpret(TCLR_Context *ctx,TCLCORE_Expr *exprList,
 	else if(slc->string->data[slc->offset] == '*'){
 		if(left.typ & NUMBERT_Gmpz && right.typ & NUMBERT_Gmpz){
 			mpz_mul(outNum.var.gmpz,left.var.gmpz,right.var.gmpz);
-			outNum.typ = NUMBERT_Gmpz;
+			outNum.typ = NUMBERT_Gmpz | NUMBERT_DO_FREE;
 		}
 		if(left.typ & NUMBERT_Float && right.typ & NUMBERT_Float){
 			outNum.var.flt = left.var.flt * right.var.flt;
@@ -357,7 +358,7 @@ TCL_Number exprTokenInterpret(TCLR_Context *ctx,TCLCORE_Expr *exprList,
 	else if(slc->string->data[slc->offset] == '/'){
 		if(left.typ & NUMBERT_Gmpz && right.typ & NUMBERT_Gmpz){
 			mpz_divexact(outNum.var.gmpz,left.var.gmpz,right.var.gmpz);
-			outNum.typ = NUMBERT_Gmpz;
+			outNum.typ = NUMBERT_Gmpz | NUMBERT_DO_FREE;
 		}
 		if(left.typ & NUMBERT_Float && right.typ & NUMBERT_Float){
 			outNum.var.flt = left.var.flt / right.var.flt;
@@ -367,7 +368,7 @@ TCL_Number exprTokenInterpret(TCLR_Context *ctx,TCLCORE_Expr *exprList,
 	else if(slc->string->data[slc->offset] == '%'){
 		if(left.typ & NUMBERT_Gmpz && right.typ & NUMBERT_Gmpz){
 			mpz_mod(outNum.var.gmpz,left.var.gmpz,right.var.gmpz);
-			outNum.typ = NUMBERT_Gmpz;
+			outNum.typ = NUMBERT_Gmpz | NUMBERT_DO_FREE;
 		}
 		if(left.typ & NUMBERT_Float && right.typ & NUMBERT_Float){
 			outNum.var.flt = fmodf(left.var.flt,right.var.flt);
@@ -411,14 +412,14 @@ void exprResolveDefer(TCL_String **strptr){
 				var.var.gmpf);
 	}
 	(*strptr)->deferCallback = NULL;
-	if((*strptr)->var.typ & NUMBERT_DO_FREE){
+	if(var.typ & NUMBERT_DO_FREE){
 		//free((*strptr)->var.
 	}
 	if(vcap == -1){
 		return;
 	}
-	//(*strptr)->freeCallback = _exprDeferFree;
-	(*strptr)->freeCallback = NULL;
+	(*strptr)->freeCallback = _exprFreeDefer;
+	//(*strptr)->freeCallback = NULL;
 	(*strptr)->capacity = vcap - sz + 1;
 	(*strptr)->length = vcap - sz;
 	(*strptr)->refs = refs & ~0xffffff;
@@ -502,6 +503,7 @@ TCL_String *exprFunction(TCLR_Context **ctx,TCLS_Cmd *cmd){
 		}
 		if(idx < exprPtr->length){
 			TCL_Number num = exprTokenInterpret(*ctx,exprPtr,idx);
+			num.typ &= ~NUMBERT_DO_FREE;
 			outStr = exprGetString(&num);
 			tcl_set_string_arena(&((*ctx)->arena),outStr);
 		}

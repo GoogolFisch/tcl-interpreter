@@ -252,7 +252,7 @@ TCL_String *tcls_string_from_array(uint8_t *str,int32_t length,int32_t *index){
 
 static TCL_String *_tcls_var_mkString(TCL_StringArena **stringArena,
 		TCL_String *str,TCLS_Commands **tcmd,
-		struct TCLS_Cmd **ptr_cmd,int32_t *index,
+		TCLS_Cmd **ptr_cmd,int32_t *index,
 		int32_t ending,int32_t *cStack){
 	tcmd = tcmd;
 	ptr_cmd = ptr_cmd;
@@ -315,9 +315,9 @@ static TCL_String *_tcls_var_mkString(TCL_StringArena **stringArena,
 
 static void _tcls_sub_parse_arguments(TCL_StringArena **stringArena,
 		TCL_String *str,TCLS_Commands **tcmd,
-		struct TCLS_Cmd **ptr_cmd,int32_t *index,
+		TCLS_Cmd **ptr_cmd,int32_t *index,
 		int32_t upper,int32_t *cStack){
-	struct TCLS_Cmd *cmd = *ptr_cmd;
+	TCLS_Cmd *cmd = *ptr_cmd;
 	tcmd = tcmd;
 	// TODO: also add variable concat stuff!
 	while(*index < upper){
@@ -351,7 +351,7 @@ static void _tcls_sub_parse_arguments(TCL_StringArena **stringArena,
 			if(cmd->capacity == 0)
 				cmd->capacity = TCL_MIN_CAPACITY;
 			else cmd->capacity *= 2;
-			cmd = realloc(cmd,sizeof(struct TCLS_Cmd) +
+			cmd = realloc(cmd,sizeof(TCLS_Cmd) +
 						sizeof(TCL_String *) * cmd->capacity);
 			*ptr_cmd = cmd;
 		}
@@ -437,14 +437,14 @@ static TCL_String *_tcls_cmd_get_string(TCLS_Commands **cmd,TCL_String *str,
 
 void tcls_insert_command(TCLS_Commands **cmd,TCL_String *str,
 		int32_t *strIdx,TCLS_CMD_FLAGS flags){
-	struct TCLS_Cmd *icmd = malloc(sizeof(struct TCLS_Cmd) +
+	TCLS_Cmd *icmd = malloc(sizeof(TCLS_Cmd) +
 			sizeof(TCL_String) * 0);
 	icmd->length = 0;
 	icmd->capacity = 0;
 	icmd->flags = flags;
 	icmd->stackDepth = 0;
 	icmd->command = NULL;
-	icmd->moreData = NULL;
+	icmd->deferFree = NULL;
 
 	icmd->command = _tcls_cmd_get_string(cmd,str,strIdx);
 
@@ -459,7 +459,7 @@ void tcls_insert_command(TCLS_Commands **cmd,TCL_String *str,
 		if(icmd->capacity <= icmd->length){
 			icmd->capacity *= 2;
 			if(icmd->capacity == 0)icmd->capacity = TCL_MIN_CAPACITY;
-			icmd = realloc(icmd,sizeof(struct TCLS_Cmd) +
+			icmd = realloc(icmd,sizeof(TCLS_Cmd) +
 					sizeof(TCL_String) * icmd->capacity);
 		}
 		//
@@ -470,7 +470,7 @@ void tcls_insert_command(TCLS_Commands **cmd,TCL_String *str,
 	if((*cmd)->length >= (*cmd)->capacity){
 		(*cmd)->capacity *= 2;
 		(*cmd) = realloc(*cmd,sizeof(TCLS_Commands) +
-			sizeof(struct TCLS_Cmd*) * (*cmd)->capacity);
+			sizeof(TCLS_Cmd*) * (*cmd)->capacity);
 	}
 	(*cmd)->commands[(*cmd)->length] = icmd;
 	(*cmd)->length++;
@@ -490,13 +490,14 @@ TCLS_Cmd *tcls_cmd_parse(TCL_StringArena **stringArena,
 	if(cmd == NULL)return NULL;
 	tcl_set_string_arena(stringArena,cmd);
 
-	struct TCLS_Cmd *lowCmd = malloc(sizeof(struct TCLS_Cmd));
+	TCLS_Cmd *lowCmd = malloc(sizeof(TCLS_Cmd));
 	lowCmd->moreData = NULL;
 	lowCmd->length = 0;
 	lowCmd->capacity = 0;
 	lowCmd->flags = TCLS_CMD_NORMAL;
 	lowCmd->stackDepth = stackOffset;
 	lowCmd->command = cmd;
+	lowCmd->deferFree = NULL;
 	// todo add more!
 	while(*index < upper && str->data[*index] == ' '){
 		// run only once!?
@@ -508,7 +509,7 @@ TCLS_Cmd *tcls_cmd_parse(TCL_StringArena **stringArena,
 	if((*tcmd)->capacity <= (*tcmd)->length){
 		(*tcmd)->capacity *= 2;
 		(*tcmd) = realloc((*tcmd),sizeof(TCLS_Commands) +
-			sizeof(struct TCLS_Cmd*) * (*tcmd)->capacity);
+			sizeof(TCLS_Cmd*) * (*tcmd)->capacity);
 	}
 	int32_t cm = (*tcmd)->length++;
 	(*tcmd)->commands[cm] = lowCmd;
@@ -517,7 +518,7 @@ TCLS_Cmd *tcls_cmd_parse(TCL_StringArena **stringArena,
 
 TCLS_Commands *tcls_parse_commands(TCL_StringArena **stringArena,TCL_String *str){
 	TCLS_Commands *tcmd = malloc(sizeof(TCLS_Commands) +
-			sizeof(struct TCLS_Cmd*) * TCL_MIN_CAPACITY);
+			sizeof(TCLS_Cmd*) * TCL_MIN_CAPACITY);
 	tcmd->tags = 0;
 	tcmd->refs = 0;
 	tcmd->length = 0;
@@ -528,7 +529,8 @@ TCLS_Commands *tcls_parse_commands(TCL_StringArena **stringArena,TCL_String *str
 	int32_t cmdIdx = 0;
 
 	while(cmdBeginn < str->length){
-		TCLS_Cmd *lowCmd = tcls_cmd_parse(stringArena,&tcmd,str,&cmdIdx,str->length,0);
+		TCLS_Cmd *lowCmd = tcls_cmd_parse(stringArena,
+				&tcmd,str,&cmdIdx,str->length,0);
 		if(lowCmd == NULL)break;
 		cmdBeginn = cmdIdx;
 	}
@@ -537,6 +539,8 @@ TCLS_Commands *tcls_parse_commands(TCL_StringArena **stringArena,TCL_String *str
 }
 void tcls_free_cmd(TCLS_Cmd **cmd){
 	TCLS_Cmd *c = *cmd;
+	if(c->deferFree != NULL)
+		((TCLF_NAT_Fn)(c->deferFree))(NULL,c);
 	c->command->refs--;
 	for(int32_t subIdx = 0;subIdx < c->length;subIdx++){
 		c->arguments[subIdx]->refs--;

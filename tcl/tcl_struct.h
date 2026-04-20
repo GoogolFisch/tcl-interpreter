@@ -94,6 +94,7 @@ struct TCLS_Cmd{
 	int32_t stackDepth;
 	struct TCL_String *command;
 	void *moreData;
+	void *deferFree;
 	struct TCL_String *(arguments[]);
 };
 struct TCLS_Commands{

@@ -159,6 +159,7 @@ TCL_String *tclr_compile_str(TCLR_Context *ctx,int32_t *stack,TCL_String *base){
 				//old->refs--;
 				((TCL_DEFER_CBack)(fetch->deferCallback))(&fetch);
 				tcl_set_string_arena(&(ctx->arena),fetch);
+				tcl_set_string_arena(&(ctx->arena),varStr);
 				tcl_set_into_scope(&(ctx->scope),varStr,fetch);
 			}
 			else free(varStr);
@@ -205,13 +206,14 @@ void tclr_step_instruction(TCLR_Context **ctx_ptr){
 	if(curCmd->command == NULL){
 		printf("(15f3ecff-6441-443f-b8c7-ea7b1656697e)\n");
 	}
-	struct TCLS_Cmd *execCmd = malloc(sizeof(struct TCLS_Cmd) + 
-			sizeof(TCLS_Cmd) * curCmd->length);
+	struct TCLS_Cmd *execCmd = malloc(sizeof(TCLS_Cmd) + 
+			sizeof(TCL_String) * curCmd->length);
 	execCmd->length = curCmd->length;
 	execCmd->capacity = curCmd->length;
 	execCmd->stackDepth = curCmd->stackDepth;
 	execCmd->flags = curCmd->flags;
 	execCmd->moreData = curCmd->moreData;
+	execCmd->deferFree = NULL;
 
 	int32_t stOff = execCmd->stackDepth;
 	execCmd->command = tclr_compile_str(ctx,&stOff,curCmd->command);
@@ -262,8 +264,12 @@ void tclr_step_instruction(TCLR_Context **ctx_ptr){
 						    execCmd->arguments[i]->data);
 			}
 		}
+		if(curCmd->deferFree != NULL && fnIdx->natFn != curCmd->deferFree){
+			((TCLF_NAT_Fn)(fnIdx->natFn))(ctx_ptr,execCmd);
+		}
 		returned = ((TCLF_NAT_Fn)(fnIdx->natFn))(ctx_ptr,execCmd);
 		curCmd->moreData = execCmd->moreData;
+		curCmd->deferFree = fnIdx->freeFn;
 		if(curCmd->command->tags == TCL_ST_Variable &&
 				fnIdx->freeFn != NULL){
 			((TCLF_NAT_Fn)(fnIdx->freeFn))(ctx_ptr,execCmd);
