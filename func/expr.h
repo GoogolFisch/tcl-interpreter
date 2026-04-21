@@ -384,7 +384,7 @@ TCL_Number exprTokenInterpret(TCLR_Context *ctx,TCLCORE_Expr *exprList,
 }
 void exprResolveDefer(TCL_String **strptr){
 	//TCL_String mem = **strptr;
-	int32_t refs = (*strptr)->refs;
+	//int32_t refs = (*strptr)->refs;
 	int32_t tags = (*strptr)->tags;
 	//tags &= ~TCL_ST_Defer;
 	struct TCL_Number var = (*strptr)->var;
@@ -422,7 +422,8 @@ void exprResolveDefer(TCL_String **strptr){
 	//(*strptr)->freeCallback = NULL;
 	(*strptr)->capacity = vcap - sz + 1;
 	(*strptr)->length = vcap - sz;
-	(*strptr)->refs = refs & ~0xffffff;
+	//(*strptr)->refs = refs & ~0xffffff;
+	(*strptr)->refs = 0;
 	(*strptr)->tags = tags;
 	(*strptr)->var = var;
 }
@@ -507,18 +508,18 @@ TCL_String *exprFunction(TCLR_Context **ctx,TCLS_Cmd *cmd){
 			outStr = exprGetString(&num);
 			tcl_set_string_arena(&((*ctx)->arena),outStr);
 		}
+		//
+		if(
+				cmd->arguments[0]->tags == TCL_ST_None &&
+				cmd->command->tags == TCL_ST_None
+		){
+			cmd->moreData = exprPtr;
+			return outStr;
+		}
 	}
 	// make this compute stuff!
-	if(
-			cmd->arguments[0]->tags == TCL_ST_None &&
-			cmd->command->tags == TCL_ST_None &&
-			!error
-	)
-		cmd->moreData = exprPtr;
-	else{
-		cmd->moreData = NULL;
-		exprTokensFree(exprPtr);
-	}
+	cmd->moreData = NULL;
+	exprTokensFree(exprPtr);
 	return outStr;
 }
 

@@ -157,9 +157,11 @@ TCL_String *tclr_compile_str(TCLR_Context *ctx,int32_t *stack,TCL_String *base){
 			if(fetch->deferCallback != NULL){
 				//TCL_String *old = fetch;
 				//old->refs--;
+				fetch->refs--;
 				((TCL_DEFER_CBack)(fetch->deferCallback))(&fetch);
 				tcl_set_string_arena(&(ctx->arena),fetch);
 				tcl_set_string_arena(&(ctx->arena),varStr);
+				//fetch->refs++;
 				tcl_set_into_scope(&(ctx->scope),varStr,fetch);
 			}
 			else free(varStr);
