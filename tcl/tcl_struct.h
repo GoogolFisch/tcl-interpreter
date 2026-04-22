@@ -38,12 +38,16 @@ enum TCL_String_Tags{
 	TCL_ST_LookUp,
 	TCL_ST_Object,
 
-	//TCL_ST_Defer = 32,
-	TCL_ST_Int = 64,
-	TCL_ST_Quot = 128,
-	TCL_ST_Float = 192,
+	TCL_ST_Mask = 127,
+	TCL_ST_Var_Accounted = 128,
 };
 
+struct TCL_Disposable{
+	int32_t refs;
+	int32_t tags;
+	void *freeCallback;
+	//void *replaceWith;
+};
 // should be immutable when refs > 1?
 struct TCL_String{
 	int32_t refs;
@@ -77,6 +81,7 @@ struct TCL_StringArena{
 	int32_t length;
 	int32_t capacity;
 	struct TCL_String *(string[]);
+	//struct TCL_Disposable *(list[]);
 };
 struct TCL_SliceArena{
 	int32_t length;

@@ -60,6 +60,10 @@ void exprTokenise(TCLCORE_Expr **exprList,TCL_String *str){
 		if(state == '$' && move == ':') goto expr_token_append;
 		if(state == '0' && move == '0') goto expr_token_append;
 		if(state == ':' && move == ':') goto expr_token_append;
+		if(state == '=' && move == '=') goto expr_token_append;
+		if(state == '>' && move == '=') goto expr_token_append;
+		if(state == '<' && move == '=') goto expr_token_append;
+		if(state == '!' && move == '=') goto expr_token_append;
 		if(state == '0' && move == '.'){
 			state = '.';
 			goto expr_token_append;
@@ -173,7 +177,7 @@ int32_t exprTokenOverList(TCLCORE_Expr *exprList,
 	/// combine * % /
 	for(idx = lower;idx < upper;idx++){
 		TCL_Slice *slc = &(exprList->expr[idx].str);
-		if(slc->length == 0)continue;
+		if(slc->length != 1)continue;
 		if(exprList->expr[idx].flags == EXPR_LISTF_USED)continue;
 		//
 		if(slc->string->data[slc->offset] == '*')
@@ -186,12 +190,25 @@ int32_t exprTokenOverList(TCLCORE_Expr *exprList,
 	/// combine + -
 	for(idx = lower;idx < upper;idx++){
 		TCL_Slice *slc = &(exprList->expr[idx].str);
-		if(slc->length == 0)continue;
+		if(slc->length != 1)continue;
 		if(exprList->expr[idx].flags == EXPR_LISTF_USED)continue;
 		//
 		if(slc->string->data[slc->offset] == '+')
 			exprTokenOperationTree(exprList,idx,lower,upper,0);
 		if(slc->string->data[slc->offset] == '-')
+			exprTokenOperationTree(exprList,idx,lower,upper,0);
+	}
+	/// combine == <= >= < >
+	for(idx = lower;idx < upper;idx++){
+		TCL_Slice *slc = &(exprList->expr[idx].str);
+		if(slc->length < 1 || slc->length > 2)continue;
+		if(exprList->expr[idx].flags == EXPR_LISTF_USED)continue;
+		//
+		if(slc->string->data[slc->offset] == '=')
+			exprTokenOperationTree(exprList,idx,lower,upper,0);
+		if(slc->string->data[slc->offset] == '<')
+			exprTokenOperationTree(exprList,idx,lower,upper,0);
+		if(slc->string->data[slc->offset] == '>')
 			exprTokenOperationTree(exprList,idx,lower,upper,0);
 	}
 	
@@ -286,7 +303,7 @@ TCL_Number exprTokenInterpret(TCLR_Context *ctx,TCLCORE_Expr *exprList,
 	if(idx == -1)
 		return outNum;
 	TCL_Slice *slc = &(exprList->expr[idx].str);
-	if(slc->tags == TCL_ST_Variable){
+	if((slc->tags & TCL_ST_Mask) == TCL_ST_Variable){
 		/*
 		TCL_Slice vslice = (TCL_Slice){
 			.refs = 1, .flags = 0,
@@ -296,7 +313,9 @@ TCL_Number exprTokenInterpret(TCLR_Context *ctx,TCLCORE_Expr *exprList,
 		};
 		outStr = tcl_get_from_scope_slice(&(ctx->scope),vslice);
 		//  */
-		TCL_String *outStr = tcl_get_from_scope_slice(&(ctx->scope),slc);
+		TCL_String *outStr = tcl_get_from_scope_slice(
+				&(ctx->scope),slc);
+
 		if((outStr->var.typ & NUMBERT_Mask) != NUMBERT_None)
 			return outStr->var;
 		TCL_Slice slc = (TCL_Slice){
@@ -308,8 +327,11 @@ TCL_Number exprTokenInterpret(TCLR_Context *ctx,TCLCORE_Expr *exprList,
 		outStr->freeCallback = (void*)_exprFreeDefer;
 		return outStr->var;
 	}
-	TCL_Number left  = exprTokenInterpret(ctx,exprList,exprList->expr[idx].left );
-	TCL_Number right = exprTokenInterpret(ctx,exprList,exprList->expr[idx].right);
+	TCL_Number left  = exprTokenInterpret(ctx,
+			exprList,exprList->expr[idx].left );
+	TCL_Number right = exprTokenInterpret(ctx,
+			exprList,exprList->expr[idx].right);
+
 	if((left.typ & NUMBERT_Mask) == NUMBERT_Gmpz &&
 			(right.typ & NUMBERT_Mask) == NUMBERT_Float){
 		left.typ = (left.typ & ~NUMBERT_Mask) | NUMBERT_Float;
@@ -326,10 +348,13 @@ TCL_Number exprTokenInterpret(TCLR_Context *ctx,TCLCORE_Expr *exprList,
 		mpz_clear(right.var.gmpz);
 		right.var.flt = rft;
 	}
+	int32_t cmp;
 	//
 	if(slc->string->data[slc->offset] == '+'){
 		if(left.typ & NUMBERT_Gmpz && right.typ & NUMBERT_Gmpz){
-			mpz_add(outNum.var.gmpz,left.var.gmpz,right.var.gmpz);
+			mpz_add(outNum.var.gmpz,
+					left.var.gmpz,
+					right.var.gmpz);
 			outNum.typ = NUMBERT_Gmpz | NUMBERT_DO_FREE;
 		}
 		if(left.typ & NUMBERT_Float && right.typ & NUMBERT_Float){
@@ -339,7 +364,9 @@ TCL_Number exprTokenInterpret(TCLR_Context *ctx,TCLCORE_Expr *exprList,
 	}
 	else if(slc->string->data[slc->offset] == '-'){
 		if(left.typ & NUMBERT_Gmpz && right.typ & NUMBERT_Gmpz){
-			mpz_sub(outNum.var.gmpz,left.var.gmpz,right.var.gmpz);
+			mpz_sub(outNum.var.gmpz,
+					left.var.gmpz,
+					right.var.gmpz);
 			outNum.typ = NUMBERT_Gmpz | NUMBERT_DO_FREE;
 		}
 		if(left.typ & NUMBERT_Float && right.typ & NUMBERT_Float){
@@ -349,7 +376,9 @@ TCL_Number exprTokenInterpret(TCLR_Context *ctx,TCLCORE_Expr *exprList,
 	}
 	else if(slc->string->data[slc->offset] == '*'){
 		if(left.typ & NUMBERT_Gmpz && right.typ & NUMBERT_Gmpz){
-			mpz_mul(outNum.var.gmpz,left.var.gmpz,right.var.gmpz);
+			mpz_mul(outNum.var.gmpz,
+					left.var.gmpz,
+					right.var.gmpz);
 			outNum.typ = NUMBERT_Gmpz | NUMBERT_DO_FREE;
 		}
 		if(left.typ & NUMBERT_Float && right.typ & NUMBERT_Float){
@@ -359,7 +388,9 @@ TCL_Number exprTokenInterpret(TCLR_Context *ctx,TCLCORE_Expr *exprList,
 	}
 	else if(slc->string->data[slc->offset] == '/'){
 		if(left.typ & NUMBERT_Gmpz && right.typ & NUMBERT_Gmpz){
-			mpz_divexact(outNum.var.gmpz,left.var.gmpz,right.var.gmpz);
+			mpz_divexact(outNum.var.gmpz,
+					left.var.gmpz,
+					right.var.gmpz);
 			outNum.typ = NUMBERT_Gmpz | NUMBERT_DO_FREE;
 		}
 		if(left.typ & NUMBERT_Float && right.typ & NUMBERT_Float){
@@ -377,6 +408,84 @@ TCL_Number exprTokenInterpret(TCLR_Context *ctx,TCLCORE_Expr *exprList,
 			outNum.typ = NUMBERT_Float;
 		}
 	}
+	// cmp checking
+	else if(slc->string->data[slc->offset] == '<'){
+		if(left.typ & NUMBERT_Gmpz && right.typ & NUMBERT_Gmpz){
+			cmp = mpz_cmp(left.var.gmpz,right.var.gmpz);
+			mpz_set_ui(outNum.var.gmpz,cmp < 0);
+		}
+		if(left.typ & NUMBERT_Float && right.typ & NUMBERT_Float){
+			cmp = left.var.flt < right.var.flt;
+			mpz_set_ui(outNum.var.gmpz,cmp);
+		}
+		outNum.typ = NUMBERT_Gmpz | NUMBERT_DO_FREE;
+	}
+	else if(slc->string->data[slc->offset] == '>'){
+		if(left.typ & NUMBERT_Gmpz && right.typ & NUMBERT_Gmpz){
+			cmp = mpz_cmp(left.var.gmpz,right.var.gmpz);
+			mpz_set_ui(outNum.var.gmpz,cmp > 0);
+		}
+		if(left.typ & NUMBERT_Float && right.typ & NUMBERT_Float){
+			cmp = left.var.flt > right.var.flt;
+			mpz_set_ui(outNum.var.gmpz,cmp);
+		}
+		outNum.typ = NUMBERT_Gmpz | NUMBERT_DO_FREE;
+	}
+	if(slc->length < 2)
+		goto _Expr_Parse_Exit;
+	if(slc->string->data[slc->offset] == '=' && 
+	slc->string->data[slc->offset + 1] == '='){
+		// ==
+		if(left.typ & NUMBERT_Gmpz && right.typ & NUMBERT_Gmpz){
+			cmp = mpz_cmp(left.var.gmpz,right.var.gmpz);
+			mpz_set_ui(outNum.var.gmpz,cmp == 0);
+		}
+		if(left.typ & NUMBERT_Float && right.typ & NUMBERT_Float){
+			cmp = left.var.flt == right.var.flt;
+			mpz_set_ui(outNum.var.gmpz,cmp);
+		}
+		outNum.typ = NUMBERT_Gmpz | NUMBERT_DO_FREE;
+	}
+	else if(slc->string->data[slc->offset] == '<' && 
+	slc->string->data[slc->offset + 1] == '='){
+		// <=
+		if(left.typ & NUMBERT_Gmpz && right.typ & NUMBERT_Gmpz){
+			int32_t cmp = mpz_cmp(left.var.gmpz,right.var.gmpz);
+			mpz_set_ui(outNum.var.gmpz,cmp <= 0);
+		}
+		if(left.typ & NUMBERT_Float && right.typ & NUMBERT_Float){
+			cmp = left.var.flt <= right.var.flt;
+			mpz_set_ui(outNum.var.gmpz,cmp);
+		}
+		outNum.typ = NUMBERT_Gmpz | NUMBERT_DO_FREE;
+	}
+	else if(slc->string->data[slc->offset] == '>' && 
+	slc->string->data[slc->offset + 1] == '='){
+		// >=
+		if(left.typ & NUMBERT_Gmpz && right.typ & NUMBERT_Gmpz){
+			cmp = mpz_cmp(left.var.gmpz,right.var.gmpz);
+			mpz_set_ui(outNum.var.gmpz,cmp >= 0);
+		}
+		if(left.typ & NUMBERT_Float && right.typ & NUMBERT_Float){
+			cmp = left.var.flt >= right.var.flt;
+			mpz_set_ui(outNum.var.gmpz,cmp);
+		}
+		outNum.typ = NUMBERT_Gmpz | NUMBERT_DO_FREE;
+	}
+	else if(slc->string->data[slc->offset] == '!' && 
+	slc->string->data[slc->offset + 1] == '='){
+		// !=
+		if(left.typ & NUMBERT_Gmpz && right.typ & NUMBERT_Gmpz){
+			cmp = mpz_cmp(left.var.gmpz,right.var.gmpz);
+			mpz_set_ui(outNum.var.gmpz,cmp != 0);
+		}
+		if(left.typ & NUMBERT_Float && right.typ & NUMBERT_Float){
+			cmp = left.var.flt != right.var.flt;
+			mpz_set_ui(outNum.var.gmpz,cmp);
+		}
+		outNum.typ = NUMBERT_Gmpz | NUMBERT_DO_FREE;
+	}
+_Expr_Parse_Exit:
 
 	//
 	_exprNumberMayFree(&left);
@@ -430,6 +539,7 @@ void exprResolveDefer(TCL_String **strptr){
 	(*strptr)->var = oldStr->var;
 	oldStr->replaceWith = (*strptr);
 	oldStr->var.typ = NUMBERT_None;
+	oldStr->tags |= TCL_ST_Var_Accounted;
 }
 
 TCL_String *exprGetString(TCL_Number *num){
@@ -456,7 +566,7 @@ TCL_String *exprGetString(TCL_Number *num){
 
 
 TCL_String *exprFunctionFree(TCLR_Context **ctx,TCLS_Cmd *cmd){
-	// proc {name} {args} {body}
+	// exec {expression}
 	ctx = ctx;
 	if(cmd->length != 1){
 		printf("Err with set (d0378443-5e77-4361-886d-45d58a2691da)\n");
@@ -476,7 +586,7 @@ TCL_String *exprFunctionFree(TCLR_Context **ctx,TCLS_Cmd *cmd){
 	return NULL;
 }
 TCL_String *exprFunction(TCLR_Context **ctx,TCLS_Cmd *cmd){
-	// proc {name} {args} {body}
+	// exec {expression}
 	if(cmd->length != 1){
 		printf("Err with set (62bf270b-ba0d-44ca-8bd2-5498044247ed)\n");
 		return NULL;
@@ -505,10 +615,9 @@ TCL_String *exprFunction(TCLR_Context **ctx,TCLS_Cmd *cmd){
 			tcl_set_string_arena(&((*ctx)->arena),outStr);
 		}
 		//
-		if(
-				cmd->arguments[0]->tags == TCL_ST_None &&
-				cmd->command->tags == TCL_ST_None
-		){
+		int32_t argTag = cmd->arguments[0]->tags & TCL_ST_Mask;
+		int32_t cmdTag = cmd->command->tags & TCL_ST_Mask;
+		if(argTag == TCL_ST_None && cmdTag == TCL_ST_None){
 			cmd->moreData = exprPtr;
 			return outStr;
 		}

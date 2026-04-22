@@ -290,7 +290,8 @@ void tcl_garbage_collect_string_arena(TCL_StringArena **stringArena){
 			*(int32_t*)NULL = 0;
 		}
 		if(refs)continue;
-		if(string->freeCallback != NULL)
+		if(string->freeCallback != NULL &&
+				!(string->tags & TCL_ST_Var_Accounted))
 			((TCL_DEFER_CBack)(string->freeCallback))(&string);
 		arena->string[idx] = arena->string[arena->length - 1];
 		arena->length--;

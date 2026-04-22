@@ -138,8 +138,17 @@ TCL_String *tclr_compile_str(TCLR_Context *ctx,int32_t *stack,TCL_String *base){
 			if(stStr == NULL)
 				continue;
 			if(base->length == 2){
+				// early exit for set
 				free(outStr);
 				return ctx->parseStack[(*stack) - 1];
+			}
+			if(stStr->deferCallback != NULL){
+				//TCL_String *old = fetch;
+				//old->refs--;
+				stStr->refs--;
+				((TCL_DEFER_CBack)(stStr->deferCallback))(&stStr);
+				tcl_set_string_arena(&(ctx->arena),stStr);
+				stStr->refs++;
 			}
 			tcl_string_cp(&outStr,stStr);
 			stStr->refs--;
@@ -227,7 +236,7 @@ void tclr_step_instruction(TCLR_Context **ctx_ptr){
 
 	int32_t stOff = execCmd->stackDepth;
 	execCmd->command = curCmd->command;
-	if(curCmd->command->tags == TCL_ST_Variable){
+	if((curCmd->command->tags & TCL_ST_Mask) == TCL_ST_Variable){
 		execCmd->command = tclr_compile_str(ctx,&stOff,curCmd->command);
 	}
 	execCmd->command->refs++;
@@ -283,7 +292,7 @@ void tclr_step_instruction(TCLR_Context **ctx_ptr){
 		returned = ((TCLF_NAT_Fn)(fnIdx->natFn))(ctx_ptr,execCmd);
 		curCmd->moreData = execCmd->moreData;
 		curCmd->deferFree = fnIdx->freeFn;
-		if(curCmd->command->tags == TCL_ST_Variable &&
+		if((curCmd->command->tags & TCL_ST_Mask) == TCL_ST_Variable &&
 				fnIdx->freeFn != NULL){
 			if(ctx->globFlags & TCLRG_VERBOSE_EXEC){
 				printf("free %.*s\n",  execCmd->command->length,
