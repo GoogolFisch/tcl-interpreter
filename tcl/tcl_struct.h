@@ -52,6 +52,7 @@ struct TCL_String{
 	struct TCL_Number var;
 	void *deferCallback;
 	void *freeCallback;
+	void *replaceWith;
 	int32_t capacity;
 	uint8_t data[];
 };

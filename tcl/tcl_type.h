@@ -131,6 +131,7 @@ TCL_String *tcl_create_string(int32_t length,char *data){
 	strOut->var.typ = 0;
 	strOut->deferCallback = NULL;
 	strOut->freeCallback = NULL;
+	strOut->replaceWith = NULL;
 	strOut->capacity = length;
 	strOut->refs = 0;
 	for(int32_t idx = 0;idx < length;idx++)

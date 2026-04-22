@@ -82,6 +82,7 @@ TCL_String *tclr_get_var_slice(TCL_String *str,int32_t *index){
 	outStr->var.typ = 0;
 	outStr->deferCallback = NULL;
 	outStr->freeCallback = NULL;
+	outStr->replaceWith = NULL;
 	outStr->capacity = TCL_MIN_CAPACITY;
 	outStr->length = 0;
 	outStr->refs = 0;
@@ -119,6 +120,7 @@ TCL_String *tclr_compile_str(TCLR_Context *ctx,int32_t *stack,TCL_String *base){
 	outStr->var.typ = 0;
 	outStr->deferCallback = NULL;
 	outStr->freeCallback = NULL;
+	outStr->replaceWith = NULL;
 	outStr->capacity = base->length;
 	outStr->refs = 0;
 	outStr->tags = 0;
@@ -153,6 +155,11 @@ TCL_String *tclr_compile_str(TCLR_Context *ctx,int32_t *stack,TCL_String *base){
 				"(475b4b5c-bc52-4517-82ac-a82fec7f7b25)\n",
 				varStr->length,varStr->data);
 				continue;
+			}
+			while(fetch->replaceWith != NULL){
+				//fetch->refs--;
+				fetch = fetch->replaceWith;
+				tcl_set_into_scope(&(ctx->scope),varStr,fetch);
 			}
 			if(fetch->deferCallback != NULL){
 				//TCL_String *old = fetch;
@@ -274,6 +281,10 @@ void tclr_step_instruction(TCLR_Context **ctx_ptr){
 		curCmd->deferFree = fnIdx->freeFn;
 		if(curCmd->command->tags == TCL_ST_Variable &&
 				fnIdx->freeFn != NULL){
+			if(ctx->globFlags & TCLRG_VERBOSE_EXEC){
+				printf("free %.*s\n", execCmd->command->length,
+						      execCmd->command->data);
+			}
 			((TCLF_NAT_Fn)(fnIdx->freeFn))(ctx_ptr,execCmd);
 			curCmd->moreData = NULL;
 		}

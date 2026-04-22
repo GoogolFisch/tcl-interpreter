@@ -85,6 +85,7 @@ void setFn(TCLR_Context **ctx,TCLS_Cmd *cmd){
  var = malloc(sizeof(TCL_String) + sizeof(char) * sizeof(msg));                \
  var->var.typ = 0;                                                             \
  var->deferCallback = NULL;                                                    \
+ var->replaceWith = NULL;                                                      \
  var->freeCallback = NULL;                                                     \
  var->capacity = sizeof(msg);                                                  \
  var->length = sizeof(msg) - 1;                                                \

@@ -206,10 +206,12 @@ void _exprNumberMayFree(TCL_Number *num){
 		mpq_clear(num->var.gmpq);
 	if((num->typ & NUMBERT_Mask) == NUMBERT_Gmpf)
 		mpf_clear(num->var.gmpf);
+	num->typ = NUMBERT_None;
 }
 void _exprFreeDefer(TCL_String **str){
-	(*str)->var.typ &= ~NUMBERT_DO_FREE;
+	(*str)->var.typ |= NUMBERT_DO_FREE;
 	_exprNumberMayFree(&((*str)->var));
+	(*str)->freeCallback = NULL;
 }
 //flag == 0 => normal expr, flag == 1 => gmp
 int32_t _exprParseString(TCL_Slice slc,TCL_Number *num,int32_t flag){
@@ -383,30 +385,29 @@ TCL_Number exprTokenInterpret(TCLR_Context *ctx,TCLCORE_Expr *exprList,
 	return outNum;
 }
 void exprResolveDefer(TCL_String **strptr){
-	//TCL_String mem = **strptr;
+	TCL_String *oldStr = *strptr;
 	//int32_t refs = (*strptr)->refs;
-	int32_t tags = (*strptr)->tags;
 	//tags &= ~TCL_ST_Defer;
-	struct TCL_Number var = (*strptr)->var;
+	struct TCL_Number var = oldStr->var;
 	int32_t vcap = -1;
 	// why gcc why is it an int32_t larger?
 	int32_t sz = (int32_t)(sizeof(TCL_String) - sizeof(int32_t));
-	if(((*strptr)->var.typ & NUMBERT_Mask) == NUMBERT_Float){
+	if((var.typ & NUMBERT_Mask) == NUMBERT_Float){
 		vcap = asprintf((char**)strptr,"%0*i%f",
 				(int)sz,0,
 				var.var.flt);
 	}
-	else if(((*strptr)->var.typ & NUMBERT_Mask) == NUMBERT_Gmpz){
+	else if((var.typ & NUMBERT_Mask) == NUMBERT_Gmpz){
 		vcap = gmp_asprintf((char**)strptr,"%0*i%Zd",
 				(int)sz,0,
 				var.var.gmpz);
 	}
-	else if(((*strptr)->var.typ & NUMBERT_Mask) == NUMBERT_Gmpq){
+	else if((var.typ & NUMBERT_Mask) == NUMBERT_Gmpq){
 		vcap = gmp_asprintf((char**)strptr,"%0*i%Qx",
 				(int)sz,0,
 				var.var.gmpq);
 	}
-	else if(((*strptr)->var.typ & NUMBERT_Mask) == NUMBERT_Gmpf){
+	else if((var.typ & NUMBERT_Mask) == NUMBERT_Gmpf){
 		vcap = gmp_asprintf((char**)strptr,"%0*i%Ff",
 				(int)sz,0,
 				var.var.gmpf);
@@ -419,13 +420,16 @@ void exprResolveDefer(TCL_String **strptr){
 		return;
 	}
 	(*strptr)->freeCallback = _exprFreeDefer;
+	(*strptr)->replaceWith = NULL;
 	//(*strptr)->freeCallback = NULL;
 	(*strptr)->capacity = vcap - sz + 1;
 	(*strptr)->length = vcap - sz;
 	//(*strptr)->refs = refs & ~0xffffff;
 	(*strptr)->refs = 0;
-	(*strptr)->tags = tags;
-	(*strptr)->var = var;
+	(*strptr)->tags = oldStr->tags;
+	(*strptr)->var = oldStr->var;
+	oldStr->replaceWith = (*strptr);
+	oldStr->var.typ = NUMBERT_None;
 }
 
 TCL_String *exprGetString(TCL_Number *num){
@@ -437,6 +441,7 @@ TCL_String *exprGetString(TCL_Number *num){
 	strOut->refs = 0;
 	strOut->deferCallback = (void*)exprResolveDefer;
 	strOut->freeCallback = (void*)_exprFreeDefer;
+	strOut->replaceWith = NULL;
 	strOut->tags = 0;//TLC_ST_Defer;
 	/*
 	if((num->typ & NUMBERT_Mask) == NUMBERT_Gmpz);
@@ -451,12 +456,8 @@ TCL_String *exprGetString(TCL_Number *num){
 
 
 TCL_String *exprFunctionFree(TCLR_Context **ctx,TCLS_Cmd *cmd){
-	ctx = ctx;
 	// proc {name} {args} {body}
-	printf("free %.*s\n",cmd->command->length,cmd->command->data);
-	for(int32_t i = 0;i < cmd->length;i++){
-		printf("- %.*s\n",cmd->arguments[i]->length,cmd->arguments[i]->data);
-	}
+	ctx = ctx;
 	if(cmd->length != 1){
 		printf("Err with set (d0378443-5e77-4361-886d-45d58a2691da)\n");
 		return NULL;
@@ -475,12 +476,7 @@ TCL_String *exprFunctionFree(TCLR_Context **ctx,TCLS_Cmd *cmd){
 	return NULL;
 }
 TCL_String *exprFunction(TCLR_Context **ctx,TCLS_Cmd *cmd){
-	ctx = ctx;
 	// proc {name} {args} {body}
-	printf("free %.*s\n",cmd->command->length,cmd->command->data);
-	for(int32_t i = 0;i < cmd->length;i++){
-		printf("- %.*s\n",cmd->arguments[i]->length,cmd->arguments[i]->data);
-	}
 	if(cmd->length != 1){
 		printf("Err with set (62bf270b-ba0d-44ca-8bd2-5498044247ed)\n");
 		return NULL;
