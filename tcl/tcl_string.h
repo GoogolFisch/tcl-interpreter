@@ -164,16 +164,19 @@ static TCL_String *_tcls_make_string_from_bound(uint8_t str[],
 	strOut->freeCallback = NULL;
 	strOut->replaceWith = NULL;
 	strOut->refs = 0;
-	strOut->tags = 0;
+	strOut->tags = TCL_ST_None;
 	strOut->capacity = upper - lower;
 	strOut->length = 0;
 	char state = 0;
 	for(int idx = lower;idx < upper;idx++){
 		if(state == 0){
-			strOut->data[strOut->length++] = str[idx];
 			if(str[idx] == '\\'){
 				state = 1;
 				continue;
+			}
+			strOut->data[strOut->length++] = str[idx];
+			if(str[idx] == '$'){
+				strOut->tags = TCL_ST_Variable;
 			}
 		}
 		else{
@@ -184,7 +187,7 @@ static TCL_String *_tcls_make_string_from_bound(uint8_t str[],
 			}
 			//strOut->data[strOut->length++] = str[idx];
 			//   /*
-			if(str[idx] == 'a')
+			else if(str[idx] == 'a')
 				strOut->data[strOut->length++] = '\a';
 			else if(str[idx] == 'b')
 				strOut->data[strOut->length++] = '\b';
@@ -235,15 +238,17 @@ TCL_String *tcls_string_from_array(uint8_t *str,int32_t length,int32_t *index){
 	TCL_String *strOut;
 	if(length >= beginning && str[beginning] != '"' && str[beginning] != '{'){
 		strOut = _tcls_make_string_from_bound(str,beginning,ending,1);
-		strOut->tags = TCL_ST_Variable;
+		//strOut->tags = TCL_ST_Variable;
 	}else if(str[beginning] == '"'){
 		strOut = _tcls_make_string_from_bound(str,beginning + 1,ending - 1,1);
-		strOut->tags = TCL_ST_Variable;
+		//strOut->tags = TCL_ST_Variable;
 	}else if(str[beginning] == '{'){
 		strOut = _tcls_make_string_from_bound(str,beginning + 1,ending - 1,0);
+		strOut->tags = TCL_ST_None;
 	}else{
 		// RAISE ERROR
 		strOut = _tcls_make_string_from_bound(str,beginning + 1,ending - 1,0);
+		strOut->tags = TCL_ST_None;
 		if(str[beginning] == '"')
 			strOut->tags = TCL_ST_Variable;
 	}
@@ -261,7 +266,7 @@ static TCL_String *_tcls_var_mkString(TCL_StringArena **stringArena,
 	TCL_String *cc = malloc(sizeof(TCL_String) +
 			sizeof(char) * (ending - *index));
 	cc->capacity = ending - *index;
-	cc->tags = TCL_ST_Variable;
+	cc->tags = TCL_ST_None;
 	cc->var.typ = 0;
 	cc->deferCallback = NULL;
 	cc->freeCallback = NULL;
@@ -279,6 +284,7 @@ static TCL_String *_tcls_var_mkString(TCL_StringArena **stringArena,
 	for(strIdx += *index;strIdx < ending;strIdx++){
 		// TODO TODOOO
 		if(str->data[strIdx] == '['){
+			cc->tags = TCL_ST_Variable;
 			cc->data[cc->length] = str->data[strIdx];
 			cc->length++;
 			int32_t lower = strIdx + 1;
@@ -302,6 +308,9 @@ static TCL_String *_tcls_var_mkString(TCL_StringArena **stringArena,
 			cc->length++;
 			// this is the best part!
 			continue;
+		}
+		else if(str->data[strIdx] == '$'){
+			cc->tags = TCL_ST_Variable;
 		}
 		if(cc->capacity <= cc->length){
 			cc->capacity *= 2;
@@ -340,6 +349,7 @@ static void _tcls_sub_parse_arguments(TCL_StringArena **stringArena,
 		if(str->data[*index] == '{'){
 			cc = _tcls_make_string_from_bound(
 					str->data,*index + 1,ending - 1,0);
+			cc->tags = TCL_ST_None;
 		} else{
 			cc = _tcls_var_mkString(stringArena,str,tcmd,
 					ptr_cmd,index,ending,cStack);
@@ -555,6 +565,9 @@ void tcls_free_commands(TCLS_Commands **tcmd){
 	TCLS_Commands *cmds = *tcmd;
 	for(int32_t idx = 0;idx < cmds->length;idx++){
 		TCLS_Cmd *c = cmds->commands[idx];
+		if(c->deferFree != NULL){
+			((TCLF_NAT_Fn)(c->deferFree))(NULL,c);
+		}
 		c->command->refs--;
 		for(int32_t subIdx = 0;subIdx < c->length;subIdx++){
 			c->arguments[subIdx]->refs--;

@@ -86,6 +86,7 @@ TCL_String *tclr_get_var_slice(TCL_String *str,int32_t *index){
 	outStr->capacity = TCL_MIN_CAPACITY;
 	outStr->length = 0;
 	outStr->refs = 0;
+	outStr->tags = TCL_ST_None;
 
 	contains = 1;
 	for(idx = *index;idx < str->length;idx++){
@@ -225,7 +226,10 @@ void tclr_step_instruction(TCLR_Context **ctx_ptr){
 	execCmd->deferFree = NULL;
 
 	int32_t stOff = execCmd->stackDepth;
-	execCmd->command = tclr_compile_str(ctx,&stOff,curCmd->command);
+	execCmd->command = curCmd->command;
+	if(curCmd->command->tags == TCL_ST_Variable){
+		execCmd->command = tclr_compile_str(ctx,&stOff,curCmd->command);
+	}
 	execCmd->command->refs++;
 	tcl_set_string_arena(&(ctx->arena),execCmd->command);
 	ctx->parseStackIdx -= execCmd->stackDepth;
@@ -282,7 +286,7 @@ void tclr_step_instruction(TCLR_Context **ctx_ptr){
 		if(curCmd->command->tags == TCL_ST_Variable &&
 				fnIdx->freeFn != NULL){
 			if(ctx->globFlags & TCLRG_VERBOSE_EXEC){
-				printf("free %.*s\n", execCmd->command->length,
+				printf("free %.*s\n",  execCmd->command->length,
 						      execCmd->command->data);
 			}
 			((TCLF_NAT_Fn)(fnIdx->freeFn))(ctx_ptr,execCmd);
