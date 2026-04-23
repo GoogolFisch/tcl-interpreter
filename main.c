@@ -102,10 +102,10 @@ TCLR_Context *make_ctx(int32_t length,char *fData){
 	makeStr(setFunc,"set");
 	tclf_insert_natFunction(&fnScope,setFunc,(void(*)())setFn);
 	//  */
-	TCL_StringArena *ar = tcl_create_string_arena();
+	TCL_GarbageArena *ar = tcl_create_garbage_arena();
 	TCL_String *str = tcl_create_string(length,fData);
 	TCLS_Commands *tcmd = tcls_parse_commands(&ar,str);
-	tcmd->refs++;
+	tcmd->gc.refs++;
 	TCLR_Context *ctx = tclr_make_context(NULL,TCLR_FULL_LAYER);
 	ctx->program = tcmd;
 	ctx->arena = ar;
@@ -124,7 +124,7 @@ void run_ctx(TCLR_Context **ctx){
 void free_ctx(TCLR_Context *ctx){
 	TCLR_Context *low_ctx;
 	while(ctx != NULL){
-		tcl_garbage_collect_string_arena(&(ctx->arena));
+		tcl_garbage_collect_arena(&(ctx->arena));
 		low_ctx = ctx->parent;
 		tclr_free_context(ctx);
 		ctx = low_ctx;

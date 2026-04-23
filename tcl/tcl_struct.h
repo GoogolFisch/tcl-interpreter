@@ -13,13 +13,13 @@
 
 // ======== structs
 enum TCL_NumTypes{
-	NUMBERT_None    =   0,
-	NUMBERT_Float   =   1,
-	NUMBERT_Gmpz    =   2,
-	NUMBERT_Gmpq    =   3,
-	NUMBERT_Gmpf    =   4,
-	NUMBERT_Mask    =  63,
-	NUMBERT_DO_FREE = 128,
+	NUMBERT_None    =    0,
+	NUMBERT_Float   =    1,
+	NUMBERT_Gmpz    =    2,
+	NUMBERT_Gmpq    =    3,
+	NUMBERT_Gmpf    =    4,
+	NUMBERT_Mask    =  255,
+	NUMBERT_DO_FREE =  256,
 };
 union TCL_NumCombine{
 	mpz_t gmpz;
@@ -27,7 +27,14 @@ union TCL_NumCombine{
 	mpf_t gmpf;
 	float flt;
 };
+struct TCL_Disposable{
+	int32_t refs;
+	int32_t tags;
+	void *freeCallback;
+	//void *replaceWith;
+};
 struct TCL_Number{
+	struct TCL_Disposable gc;
 	union TCL_NumCombine var;
 	enum TCL_NumTypes typ;
 };
@@ -41,28 +48,18 @@ enum TCL_String_Tags{
 	TCL_ST_Mask = 127,
 	TCL_ST_Var_Accounted = 128,
 };
-
-struct TCL_Disposable{
-	int32_t refs;
-	int32_t tags;
-	void *freeCallback;
-	//void *replaceWith;
-};
 // should be immutable when refs > 1?
 struct TCL_String{
-	int32_t refs;
-	int32_t tags;
+	struct TCL_Disposable gc;
 	int32_t length;
-	struct TCL_Number var;
+	struct TCL_Number *var;
 	void *deferCallback;
-	void *freeCallback;
 	void *replaceWith;
 	int32_t capacity;
 	uint8_t data[];
 };
 struct TCL_Slice{
-	int32_t refs;
-	int32_t tags;
+	struct TCL_Disposable gc;
 	int32_t offset;
 	int32_t length;
 	struct TCL_String *string;
@@ -77,16 +74,10 @@ struct TCL_Scope{
 	int32_t capacity;
 	struct _TCL_KV kv[];
 };
-struct TCL_StringArena{
+struct TCL_GarbageArena{
 	int32_t length;
 	int32_t capacity;
-	struct TCL_String *(string[]);
-	//struct TCL_Disposable *(list[]);
-};
-struct TCL_SliceArena{
-	int32_t length;
-	int32_t capacity;
-	struct TCL_Slice *(string[]);
+	struct TCL_Disposable *(list[]);
 };
 
 enum TCLS_CMD_FLAGS {
@@ -104,8 +95,7 @@ struct TCLS_Cmd{
 	struct TCL_String *(arguments[]);
 };
 struct TCLS_Commands{
-	int32_t refs;
-	int32_t tags;
+	struct TCL_Disposable gc;
 	int32_t length;
 	int32_t capacity;
 	struct TCLS_Cmd *(commands[]);
@@ -154,19 +144,19 @@ struct TCLR_Context{
 	struct TCLF_Scope *fnScope;
 	struct TCLR_Context *parent;
 	struct TCLR_Context *vparent;
-	struct TCL_StringArena *arena;
+	struct TCL_GarbageArena *arena;
 };
 
 // ========== typedefs
 typedef enum TCL_NumTypes TCL_NumTypes;
 typedef union TCL_NumCombine TCL_NumCombine;
 typedef struct TCL_Number TCL_Number;
+typedef struct TCL_Disposable TCL_Disposable;
 // 
 typedef struct TCL_String TCL_String;
 typedef struct TCL_Slice TCL_Slice;
 typedef struct TCL_Scope TCL_Scope;
-typedef struct TCL_StringArena TCL_StringArena;
-typedef struct TCL_SliceArena TCL_SliceArena;
+typedef struct TCL_GarbageArena TCL_GarbageArena;
 //
 typedef enum TCLS_CMD_FLAGS TCLS_CMD_FLAGS;
 typedef struct TCLS_Cmd TCLS_Cmd;
@@ -178,6 +168,7 @@ typedef struct TCLF_Scope TCLF_Scope;
 typedef enum TCLR_FLAGS TCLR_FLAGS;
 typedef struct TCLR_Context TCLR_Context;
 // ======= fn typdef
+typedef void(*TCL_GC_Collection)(void *place);
 typedef TCL_String*(*TCLF_NAT_Fn)(TCLR_Context **ctx,TCLS_Cmd *cmd);
 typedef void(*TCL_DEFER_CBack)(TCL_String **str); // also for free
 

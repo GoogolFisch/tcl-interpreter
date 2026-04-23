@@ -15,8 +15,6 @@ char tcl_string_eq(TCL_String *str,TCL_String *cmp);
 char tcl_string_slice_eq(TCL_String *str,TCL_Slice *cmp);
 void tcl_string_cp(TCL_String **into,TCL_String *from);
 
-TCL_Slice *tcl_get_slice_of(TCL_SliceArena **sliceArena,
-		TCL_String *string,int32_t start,int32_t end);
 TCL_String *tcl_create_string(int32_t length,char *data);
 TCL_String *tcl_create_cstring(char *data);
 
@@ -30,10 +28,10 @@ TCL_String *tcl_get_from_scope_slice(TCL_Scope **stringScope,TCL_Slice *key);
 void tcl_drop_scope(TCL_Scope **stringScope);
 TCL_Scope *tcl_create_scope(void);
 
-// stringArena
-TCL_StringArena *tcl_create_string_arena(void);
-void tcl_set_string_arena(TCL_StringArena **stringArena,TCL_String *string);
-void tcl_garbage_collect_string_arena(TCL_StringArena **stringArena);
+// gcArena
+TCL_GarbageArena *tcl_create_garbage_arena(void);
+void tcl_set_garbage_arena(TCL_GarbageArena **gcArena,TCL_Disposable *place);
+void tcl_garbage_collect_string_arena(TCL_GarbageArena **gcArena);
 
 // ========== functions
 size_t tcl_hash_string(TCL_String *string){
@@ -104,36 +102,17 @@ void tcl_string_cp(TCL_String **into,TCL_String *from){
 	}
 }
 
-TCL_Slice *tcl_get_slice_of(TCL_SliceArena **sliceArena,
-		TCL_String *string,int32_t start,int32_t end){
-
-	if((*sliceArena)->length >= (*sliceArena)->capacity){
-		(*sliceArena)->capacity *= 2;
-		*sliceArena = realloc(*sliceArena,sizeof(TCL_SliceArena) +
-				sizeof(TCL_String) * (*sliceArena)->capacity);
-	}
-	TCL_SliceArena *arena = *sliceArena;
-
-	TCL_Slice *slice = malloc(sizeof(TCL_Slice));
-	arena->string[arena->length++] = slice;
-	slice->offset = start;
-	slice->tags = 0;
-	slice->length = end - start;
-	slice->string = string;
-	string->refs++;
-	slice->refs++; // ???
-	return slice;
-}
 TCL_String *tcl_create_string(int32_t length,char *data){
 	TCL_String *strOut = malloc(sizeof(TCL_String) +
 			sizeof(char) * length);
 	strOut->length = length;
-	strOut->var.typ = 0;
+	strOut->var = NULL;
 	strOut->deferCallback = NULL;
-	strOut->freeCallback = NULL;
+	strOut->gc.freeCallback = NULL;
 	strOut->replaceWith = NULL;
 	strOut->capacity = length;
-	strOut->refs = 0;
+	strOut->gc.refs = 0;
+	strOut->gc.tags = 0;
 	for(int32_t idx = 0;idx < length;idx++)
 		strOut->data[idx] = data[idx];
 
@@ -161,9 +140,9 @@ void tcl_set_into_scope(TCL_Scope **stringScope,
 	}
 	// swap values
 	if(oldValue != NULL){
-		oldValue->refs--;
+		oldValue->gc.refs--;
 		scope->kv[idx].value = value;
-		value->refs++;
+		value->gc.refs++;
 		return;
 	}
 	// insert
@@ -206,8 +185,8 @@ void tcl_insert_into_scope(TCL_Scope **stringScope,
 	kv->kHash = hash;
 	kv->key = key;
 	kv->value = value;
-	key->refs++;
-	value->refs++;
+	key->gc.refs++;
+	value->gc.refs++;
 	return;
 }
 TCL_String *tcl_get_from_scope(TCL_Scope **stringScope,TCL_String *key){
@@ -235,8 +214,8 @@ TCL_String *tcl_get_from_scope_slice(TCL_Scope **stringScope,TCL_Slice *key){
 void tcl_drop_scope(TCL_Scope **stringScope){
 	TCL_Scope *scope = *stringScope;
 	for(int idx = 0;idx < scope->length;idx++){
-		scope->kv[idx].key->refs--;
-		scope->kv[idx].value->refs--;
+		scope->kv[idx].key->gc.refs--;
+		scope->kv[idx].value->gc.refs--;
 	}
 	free(scope);
 	return;
@@ -250,65 +229,65 @@ TCL_Scope *tcl_create_scope(void){
 	return scope;
 }
 
-// stringArena
-TCL_StringArena *tcl_create_string_arena(void){
-	TCL_StringArena *arena = malloc(sizeof(TCL_StringArena) +
-			sizeof(TCL_String*) * TCL_MIN_CAPACITY);
+// gcArena
+TCL_GarbageArena *tcl_create_garbage_arena(void){
+	TCL_GarbageArena *arena = malloc(sizeof(TCL_GarbageArena) +
+			sizeof(TCL_Disposable*) * TCL_MIN_CAPACITY);
 
 	arena->length = 0;
 	arena->capacity = TCL_MIN_CAPACITY;
 	return arena;
 }
 #define TCL_STRING_REFS_FLAG(refs) (1 << (sizeof(refs) * 8 - 2))
-void tcl_set_string_arena(TCL_StringArena **stringArena,TCL_String *string){
-	if(string->refs & TCL_STRING_REFS_FLAG(string->refs))
+void tcl_set_garbage_arena(TCL_GarbageArena **gcArena,TCL_Disposable *place){
+	if(place->refs & TCL_STRING_REFS_FLAG(place->refs))
 		return;
 /* /
-	for(int32_t idx = 0;idx < (*stringArena)->length;idx++){
-		if((*stringArena)->string[idx] == string){
+	for(int32_t idx = 0;idx < (*gcArena)->length;idx++){
+		if((*gcArena)->string[idx] == string){
 			return;
 		}
 	}
 //  */
-	string->refs |= TCL_STRING_REFS_FLAG(string->refs);
-	if((*stringArena)->length >= (*stringArena)->capacity){
-		(*stringArena)->capacity *= 2;
-		*stringArena = realloc(*stringArena,sizeof(TCL_Scope) +
-				sizeof(struct _TCL_KV) * (*stringArena)->capacity);
+	place->refs |= TCL_STRING_REFS_FLAG(place->refs);
+	if((*gcArena)->length >= (*gcArena)->capacity){
+		(*gcArena)->capacity *= 2;
+		*gcArena = realloc(*gcArena,sizeof(TCL_Scope) +
+				sizeof(struct _TCL_KV) * (*gcArena)->capacity);
 	}
-	TCL_StringArena *arena = *stringArena;
+	TCL_GarbageArena *arena = *gcArena;
 
-	arena->string[arena->length++] = string;
+	arena->list[arena->length++] = place;
 }
-void tcl_garbage_collect_string_arena(TCL_StringArena **stringArena){
-	TCL_StringArena *arena = *stringArena;
+void tcl_garbage_collect_arena(TCL_GarbageArena **gcArena){
+	TCL_GarbageArena *arena = *gcArena;
 	int32_t refs;
 	for(int idx = 0;idx < arena->length;idx++){
-		TCL_String *string = arena->string[idx];
-		refs = string->refs & ~TCL_STRING_REFS_FLAG(string->refs);
+		TCL_Disposable *place = arena->list[idx];
+		refs = place->refs & ~TCL_STRING_REFS_FLAG(place->refs);
 		if(refs < 0){
 			*(int32_t*)NULL = 0;
 		}
 		if(refs)continue;
-		if(string->freeCallback != NULL &&
-				!(string->tags & TCL_ST_Var_Accounted))
-			((TCL_DEFER_CBack)(string->freeCallback))(&string);
-		arena->string[idx] = arena->string[arena->length - 1];
+		if(place->freeCallback != NULL &&
+				!(place->tags & TCL_ST_Var_Accounted))
+			((TCL_GC_Collection)(place->freeCallback))(place);
+		arena->list[idx] = arena->list[arena->length - 1];
 		arena->length--;
-		free(string);
+		free(place);
 		idx--;
 	}
 }
-void _tcl_move_string_arena(TCL_StringArena **stringArena,
-		TCL_String *old,TCL_String *nstr){
-	for(int32_t idx = 0;idx < (*stringArena)->length;idx++){
-		if((*stringArena)->string[idx] == old){
-			(*stringArena)->string[idx] = nstr;
+void _tcl_move_string_arena(TCL_GarbageArena **gcArena,
+		TCL_Disposable *old,TCL_Disposable *nstr){
+	for(int32_t idx = 0;idx < (*gcArena)->length;idx++){
+		if((*gcArena)->list[idx] == old){
+			(*gcArena)->list[idx] = nstr;
 			return;
 		}
 	}
 	// TODO should error here?
-	tcl_set_string_arena(stringArena,nstr);
+	tcl_set_garbage_arena(gcArena,nstr);
 }
 #undef TCL_STRING_REFS_FLAG
 

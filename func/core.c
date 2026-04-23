@@ -33,7 +33,7 @@ TCL_String *incrFunction(TCLR_Context **ctx,TCLS_Cmd *cmd){
 		setTo = cmd->arguments[1];
 	else{
 		setTo = tcl_create_cstring("1");
-		tcl_set_string_arena(&((*ctx)->arena),setTo);
+		tcl_set_garbage_arena(&((*ctx)->arena),(TCL_Disposable*)setTo);
 	}
 	tcl_set_into_scope(&((*ctx)->scope),cmd->arguments[0],setTo);
 	return setTo;
@@ -46,7 +46,7 @@ TCL_String *procFunction(TCLR_Context **ctx,TCLS_Cmd *cmd){
 		return NULL;
 	}
 	TCLS_Commands *tcmd = tcls_parse_commands(&((*ctx)->arena),cmd->arguments[2]);
-	tcmd->refs++;
+	tcmd->gc.refs++;
 	tclf_insert_procFunction(&((*ctx)->fnScope),cmd->arguments[0], 
 		cmd->arguments[1],tcmd);
 	return NULL;

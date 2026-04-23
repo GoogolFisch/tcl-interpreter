@@ -31,9 +31,9 @@ TCLR_Context *tclr_make_context(TCLR_Context *ctx,TCLR_FLAGS flag){
 	return cOut;
 }
 void tclr_free_context(TCLR_Context *ctx){
-	tcl_garbage_collect_string_arena(&(ctx->arena));
+	tcl_garbage_collect_arena(&(ctx->arena));
 	tcl_drop_scope(&(ctx->scope));
-	if(ctx->program->refs == 0)
+	if(ctx->program->gc.refs == 0)
 		tcls_free_commands(&(ctx->program));
 	/* / ?????
 	for(int i = 0;i < ctx->parseStackIdx;i++){
@@ -44,7 +44,7 @@ void tclr_free_context(TCLR_Context *ctx){
 			db_print_stringArena(ctx->arena);
 		}
 		tclf_free_function_scope(&(ctx->fnScope));
-		tcl_garbage_collect_string_arena(&(ctx->arena));
+		tcl_garbage_collect_arena(&(ctx->arena));
 		free(ctx->arena);
 		// TODO
 	}
@@ -79,14 +79,14 @@ TCL_String *tclr_get_var_slice(TCL_String *str,int32_t *index){
 	}
 	outStr = malloc(sizeof(TCL_String) +
 			sizeof(char) * TCL_MIN_CAPACITY);
-	outStr->var.typ = 0;
-	outStr->deferCallback = NULL;
-	outStr->freeCallback = NULL;
-	outStr->replaceWith = NULL;
+	outStr->var = 0;
 	outStr->capacity = TCL_MIN_CAPACITY;
 	outStr->length = 0;
-	outStr->refs = 0;
-	outStr->tags = TCL_ST_None;
+	outStr->deferCallback = NULL;
+	outStr->replaceWith = NULL;
+	outStr->gc.freeCallback = NULL;
+	outStr->gc.refs = 0;
+	outStr->gc.tags = TCL_ST_None;
 
 	contains = 1;
 	for(idx = *index;idx < str->length;idx++){
@@ -118,13 +118,13 @@ TCL_String *tclr_get_var_slice(TCL_String *str,int32_t *index){
 TCL_String *tclr_compile_str(TCLR_Context *ctx,int32_t *stack,TCL_String *base){
 	TCL_String *outStr = malloc(sizeof(TCL_String) + sizeof(char) * base->length);
 	outStr->length = 0;
-	outStr->var.typ = 0;
-	outStr->deferCallback = NULL;
-	outStr->freeCallback = NULL;
-	outStr->replaceWith = NULL;
+	outStr->var = NULL;
 	outStr->capacity = base->length;
-	outStr->refs = 0;
-	outStr->tags = 0;
+	outStr->deferCallback = NULL;
+	outStr->replaceWith = NULL;
+	outStr->gc.freeCallback = NULL;
+	outStr->gc.refs = 0;
+	outStr->gc.tags = 0;
 	char state = 0;
 	for(int32_t strIdx = 0;strIdx < base->length;strIdx++){
 		if(base->data[strIdx] == '\\' && state == 0)
@@ -144,14 +144,16 @@ TCL_String *tclr_compile_str(TCLR_Context *ctx,int32_t *stack,TCL_String *base){
 			}
 			if(stStr->deferCallback != NULL){
 				//TCL_String *old = fetch;
-				//old->refs--;
-				stStr->refs--;
+				//old->gc.refs--;
+				stStr->gc.refs--;
 				((TCL_DEFER_CBack)(stStr->deferCallback))(&stStr);
-				tcl_set_string_arena(&(ctx->arena),stStr);
-				stStr->refs++;
+				tcl_set_garbage_arena(
+						&(ctx->arena),
+						(TCL_Disposable*)stStr);
+				stStr->gc.refs++;
 			}
 			tcl_string_cp(&outStr,stStr);
-			stStr->refs--;
+			stStr->gc.refs--;
 			continue;
 		}
 		if(base->data[strIdx] == '$' && state == 0){
@@ -173,11 +175,15 @@ TCL_String *tclr_compile_str(TCLR_Context *ctx,int32_t *stack,TCL_String *base){
 			}
 			if(fetch->deferCallback != NULL){
 				//TCL_String *old = fetch;
-				//old->refs--;
-				fetch->refs--;
+				//old->gc.refs--;
+				fetch->gc.refs--;
 				((TCL_DEFER_CBack)(fetch->deferCallback))(&fetch);
-				tcl_set_string_arena(&(ctx->arena),fetch);
-				tcl_set_string_arena(&(ctx->arena),varStr);
+				tcl_set_garbage_arena(
+						&(ctx->arena),
+						(TCL_Disposable*)fetch);
+				tcl_set_garbage_arena(
+						&(ctx->arena),
+						(TCL_Disposable*)varStr);
 				//fetch->refs++;
 				tcl_set_into_scope(&(ctx->scope),varStr,fetch);
 			}
@@ -199,7 +205,7 @@ TCL_String *tclr_compile_str(TCLR_Context *ctx,int32_t *stack,TCL_String *base){
 	}
 	return outStr;
 }
-void _tclr_fill_scope(TCL_StringArena **arena,TCL_Scope **scope,TCL_String *str,TCLS_Cmd *cmd){
+void _tclr_fill_scope(TCL_GarbageArena **arena,TCL_Scope **scope,TCL_String *str,TCLS_Cmd *cmd){
 	TCL_Slice *slc = malloc(sizeof(TCL_Slice));
 	slc->length = str->length;
 	slc->offset = 0;
@@ -207,7 +213,7 @@ void _tclr_fill_scope(TCL_StringArena **arena,TCL_Scope **scope,TCL_String *str,
 	for(int32_t idx = 0;slc != NULL && idx < cmd->length;idx++){
 		TCL_String *key = tcls_list_iter(&slc);
 		tcl_set_into_scope(scope,key,cmd->arguments[idx]);
-		tcl_set_string_arena(arena,key);
+		tcl_set_garbage_arena(arena,(TCL_Disposable*)key);
 	}
 }
 
@@ -215,7 +221,7 @@ void tclr_step_instruction(TCLR_Context **ctx_ptr){
 	TCLR_Context *ctx = *ctx_ptr;
 	if(ctx == NULL)return;
 	if((*ctx_ptr)->program->length <= ctx->instruction){
-		ctx->program->refs--;
+		ctx->program->gc.refs--;
 		TCLR_Context *freeing = ctx;
 		*ctx_ptr = (*ctx_ptr)->parent;
 		tclr_free_context(freeing);
@@ -236,11 +242,11 @@ void tclr_step_instruction(TCLR_Context **ctx_ptr){
 
 	int32_t stOff = execCmd->stackDepth;
 	execCmd->command = curCmd->command;
-	if((curCmd->command->tags & TCL_ST_Mask) == TCL_ST_Variable){
+	if((curCmd->command->gc.tags & TCL_ST_Mask) == TCL_ST_Variable){
 		execCmd->command = tclr_compile_str(ctx,&stOff,curCmd->command);
 	}
-	execCmd->command->refs++;
-	tcl_set_string_arena(&(ctx->arena),execCmd->command);
+	execCmd->command->gc.refs++;
+	tcl_set_garbage_arena(&(ctx->arena),(TCL_Disposable*)execCmd->command);
 	ctx->parseStackIdx -= execCmd->stackDepth;
 	struct TCLF_KV *fnIdx = tclf_get_function(ctx->fnScope,execCmd->command);
 	if(fnIdx == NULL){
@@ -251,7 +257,7 @@ void tclr_step_instruction(TCLR_Context **ctx_ptr){
 		ctx->instruction++;
 		if(curCmd->flags == TCLS_CMD_PUSH)
 			ctx->parseStack[curCmd->stackDepth] = NULL;
-		execCmd->command->refs--;
+		execCmd->command->gc.refs--;
 		free(execCmd); /// 
 		// TODO if fnIdx->flags == TCLF_FN_PUSH
 		return;
@@ -260,19 +266,21 @@ void tclr_step_instruction(TCLR_Context **ctx_ptr){
 	if(fnIdx->flags & TCLF_FN_RAW){
 		for(int32_t i = 0;i < curCmd->length;i++){
 			execCmd->arguments[i] = curCmd->arguments[i];
-			execCmd->arguments[i]->refs++;
+			execCmd->arguments[i]->gc.refs++;
 		}
 	}
 	else{
 		for(int32_t i = 0;i < curCmd->length;i++){
-			if(curCmd->arguments[i]->tags & TCL_ST_Variable){
+			if(curCmd->arguments[i]->gc.tags & TCL_ST_Variable){
 				execCmd->arguments[i] = tclr_compile_str(
 						ctx,&stOff,curCmd->arguments[i]);
-				tcl_set_string_arena(&(ctx->arena),execCmd->arguments[i]);
+				tcl_set_garbage_arena(
+						&(ctx->arena),
+						(TCL_Disposable*)execCmd->arguments[i]);
 			}else{
 				execCmd->arguments[i] = curCmd->arguments[i];
 			}
-			execCmd->arguments[i]->refs++;
+			execCmd->arguments[i]->gc.refs++;
 		}
 	}
 	TCL_String *returned = NULL;
@@ -292,7 +300,7 @@ void tclr_step_instruction(TCLR_Context **ctx_ptr){
 		returned = ((TCLF_NAT_Fn)(fnIdx->natFn))(ctx_ptr,execCmd);
 		curCmd->moreData = execCmd->moreData;
 		curCmd->deferFree = fnIdx->freeFn;
-		if((curCmd->command->tags & TCL_ST_Mask) == TCL_ST_Variable &&
+		if((curCmd->command->gc.tags & TCL_ST_Mask) == TCL_ST_Variable &&
 				fnIdx->freeFn != NULL){
 			if(ctx->globFlags & TCLRG_VERBOSE_EXEC){
 				printf("free %.*s\n",  execCmd->command->length,
@@ -307,16 +315,16 @@ void tclr_step_instruction(TCLR_Context **ctx_ptr){
 		_tclr_fill_scope(&(lowCtx->arena),&(lowCtx->scope),
 				fnIdx->arguments,execCmd);
 		lowCtx->program = fnIdx->body;
-		lowCtx->program->refs++;
+		lowCtx->program->gc.refs++;
 		(*ctx_ptr) = lowCtx;
 		// TODO also think about return values!
 	}
 	if(curCmd->flags == TCLS_CMD_PUSH){
 		ctx->parseStack[curCmd->stackDepth] = returned;
-		if(returned != NULL)returned->refs++;
+		if(returned != NULL)returned->gc.refs++;
 	}
 	if(returned != NULL){
-		tcl_set_string_arena(&(ctx->arena),returned);
+		tcl_set_garbage_arena(&(ctx->arena),(TCL_Disposable*)returned);
 	}
 	returned = returned;
 	tcls_free_cmd(&execCmd);

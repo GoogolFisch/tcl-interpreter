@@ -26,7 +26,7 @@ void tclf_insert_natFunction(TCLF_Scope **ptr_scope,TCL_String *str,
 		scope = *ptr_scope;
 	}
 	size_t hash = tcl_hash_string(str);
-	str->refs++;
+	str->gc.refs++;
 	scope->kv[scope->length].kHash = hash;
 	scope->kv[scope->length].key = str;
 	scope->kv[scope->length].natFn = fn;
@@ -46,9 +46,9 @@ void tclf_insert_procFunction(TCLF_Scope **ptr_scope,TCL_String *key,
 		scope = *ptr_scope;
 	}
 	size_t hash = tcl_hash_string(key);
-	key->refs++;
-	arguments->refs++;
-	body->refs++;
+	key->gc.refs++;
+	arguments->gc.refs++;
+	body->gc.refs++;
 	scope->kv[scope->length].kHash = hash;
 	scope->kv[scope->length].key = key;
 	scope->kv[scope->length].arguments = arguments;
@@ -71,9 +71,9 @@ void tclf_free_function_scope(TCLF_Scope **fns){
 	TCLF_Scope *fnScope = *fns;
 	for(int32_t fidx = 0;fidx < fnScope->length;fidx++){
 		struct TCLF_KV *fkv = &(fnScope->kv[fidx]);
-		fkv->key->refs--;
+		fkv->key->gc.refs--;
 		if(fkv->arguments != NULL)
-			fkv->arguments->refs--;
+			fkv->arguments->gc.refs--;
 		if(fkv->body != NULL)
 			tcls_free_commands(&(fkv->body));
 	}
