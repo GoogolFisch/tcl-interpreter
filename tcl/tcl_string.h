@@ -162,7 +162,7 @@ static TCL_String *_tcls_make_string_from_bound(uint8_t str[],
 	strOut->var = NULL;
 	strOut->deferCallback = NULL;
 	strOut->replaceWith = NULL;
-	strOut->gc.freeCallback = NULL;
+	strOut->gc.freeCallback = (void*)tcl_free_string;
 	strOut->gc.refs = 0;
 	strOut->gc.tags = TCL_ST_None;
 	strOut->capacity = upper - lower;
@@ -269,7 +269,7 @@ static TCL_String *_tcls_var_mkString(TCL_GarbageArena **garbageArena,
 	cc->var = NULL;
 	cc->deferCallback = NULL;
 	cc->replaceWith = NULL;
-	cc->gc.freeCallback = NULL;
+	cc->gc.freeCallback = (void*)tcl_free_string;
 	cc->gc.tags = TCL_ST_None;
 	cc->gc.refs = 0;
 	cc->length = 0;
@@ -412,7 +412,7 @@ static TCL_String *_tcls_cmd_get_string(TCLS_Commands **cmd,TCL_String *str,
 	//
 	outStr = malloc(sizeof(TCL_String) + sizeof(char) * (ending - start));
 	outStr->var->typ = 0;
-	outStr->gc.freeCallback = NULL;
+	outStr->gc.freeCallback = (void*)tcl_free_string;
 	outStr->deferCallback = NULL;
 	outStr->replaceWith = NULL;
 	char startChar = str->data[*strIdx];

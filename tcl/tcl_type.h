@@ -28,10 +28,12 @@ TCL_String *tcl_get_from_scope_slice(TCL_Scope **stringScope,TCL_Slice *key);
 void tcl_drop_scope(TCL_Scope **stringScope);
 TCL_Scope *tcl_create_scope(void);
 
+void tcl_free_string(void *place);
+
 // gcArena
 TCL_GarbageArena *tcl_create_garbage_arena(void);
 void tcl_set_garbage_arena(TCL_GarbageArena **gcArena,TCL_Disposable *place);
-void tcl_garbage_collect_string_arena(TCL_GarbageArena **gcArena);
+char tcl_garbage_collect_string_arena(TCL_GarbageArena **gcArena);
 
 // ========== functions
 size_t tcl_hash_string(TCL_String *string){
@@ -108,7 +110,7 @@ TCL_String *tcl_create_string(int32_t length,char *data){
 	strOut->length = length;
 	strOut->var = NULL;
 	strOut->deferCallback = NULL;
-	strOut->gc.freeCallback = NULL;
+	strOut->gc.freeCallback = (void*)tcl_free_string;
 	strOut->replaceWith = NULL;
 	strOut->capacity = length;
 	strOut->gc.refs = 0;
@@ -228,7 +230,15 @@ TCL_Scope *tcl_create_scope(void){
 	scope->capacity = TCL_MIN_CAPACITY;
 	return scope;
 }
-
+void tcl_free_string(void *place){
+	TCL_String *str = place;
+	if(str->var != NULL){
+		str->var->gc.refs--;
+	}
+	if(str->replaceWith != NULL){
+		str->replaceWith->gc.refs--;
+	}
+}
 // gcArena
 TCL_GarbageArena *tcl_create_garbage_arena(void){
 	TCL_GarbageArena *arena = malloc(sizeof(TCL_GarbageArena) +
@@ -259,16 +269,19 @@ void tcl_set_garbage_arena(TCL_GarbageArena **gcArena,TCL_Disposable *place){
 
 	arena->list[arena->length++] = place;
 }
-void tcl_garbage_collect_arena(TCL_GarbageArena **gcArena){
+char tcl_garbage_collect_arena(TCL_GarbageArena **gcArena){
 	TCL_GarbageArena *arena = *gcArena;
 	int32_t refs;
+	char changed = 0;
 	for(int idx = 0;idx < arena->length;idx++){
 		TCL_Disposable *place = arena->list[idx];
 		refs = place->refs & ~TCL_STRING_REFS_FLAG(place->refs);
-		if(refs < 0){
+		if(refs < 0 || refs >= 0x1000){
 			*(int32_t*)NULL = 0;
 		}
 		if(refs)continue;
+		if(place->freeCallback == NULL)
+			free(place);
 		if(place->freeCallback != NULL &&
 				!(place->tags & TCL_ST_Var_Accounted))
 			((TCL_GC_Collection)(place->freeCallback))(place);
@@ -276,7 +289,9 @@ void tcl_garbage_collect_arena(TCL_GarbageArena **gcArena){
 		arena->length--;
 		free(place);
 		idx--;
+		changed = 1;
 	}
+	return changed;
 }
 void _tcl_move_string_arena(TCL_GarbageArena **gcArena,
 		TCL_Disposable *old,TCL_Disposable *nstr){

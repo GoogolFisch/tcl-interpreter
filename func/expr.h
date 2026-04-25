@@ -27,6 +27,22 @@ typedef struct TCLCORE_Expr{
 	TCLCORE_LIST_Expr expr[];
 } TCLCORE_Expr;
 
+void _exprNumberMayFree(TCL_Number *num){
+	if(!(num->typ & NUMBERT_DO_FREE))
+		return;
+	if((num->typ & NUMBERT_Mask) == NUMBERT_Gmpz)
+		mpz_clear(num->var.gmpz);
+	if((num->typ & NUMBERT_Mask) == NUMBERT_Gmpq)
+		mpq_clear(num->var.gmpq);
+	if((num->typ & NUMBERT_Mask) == NUMBERT_Gmpf)
+		mpf_clear(num->var.gmpf);
+	num->typ = NUMBERT_None;
+}
+void exprFreeNumber(void *place){
+	TCL_Number *num = place;
+	num->typ &= ~NUMBERT_DO_FREE;
+	_exprNumberMayFree(num);
+}
 void exprTokenise(TCLCORE_Expr **exprList,TCL_String *str){
 	int32_t idx, exprOff;
 	exprOff = 0;
@@ -218,20 +234,11 @@ int32_t exprTokenOverList(TCLCORE_Expr *exprList,
 	
 	return 0;
 }
-void _exprNumberMayFree(TCL_Number *num){
-	if(!(num->typ & NUMBERT_DO_FREE))
-		return;
-	if((num->typ & NUMBERT_Mask) == NUMBERT_Gmpz)
-		mpz_clear(num->var.gmpz);
-	if((num->typ & NUMBERT_Mask) == NUMBERT_Gmpq)
-		mpq_clear(num->var.gmpq);
-	if((num->typ & NUMBERT_Mask) == NUMBERT_Gmpf)
-		mpf_clear(num->var.gmpf);
-	num->typ = NUMBERT_None;
-}
 void _exprFreeDefer(TCL_String *str){
-	str->var->typ |= NUMBERT_DO_FREE;
+	//str->var->typ |= NUMBERT_DO_FREE;
 	_exprNumberMayFree(str->var);
+	free(str->var);
+	str->var = NULL;
 	str->gc.freeCallback = NULL;
 }
 //flag == 0 => normal expr, flag == 1 => gmp
@@ -273,6 +280,7 @@ int32_t _exprParseString(TCL_Slice slc,TCL_Number **numptr,int32_t flag){
 		(**numptr) = (TCL_Number){0};
 		(*numptr)->gc = (TCL_Disposable){0};
 		(*numptr)->typ = NUMBERT_None;
+		(*numptr)->gc.freeCallback = (void*)exprFreeNumber;
 
 	}
 	TCL_Number *num = *numptr;
@@ -309,8 +317,7 @@ int32_t _exprParseString(TCL_Slice slc,TCL_Number **numptr,int32_t flag){
 }
 TCL_Number *exprTokenInterpret(TCLR_Context *ctx,TCLCORE_Expr *exprList,
 		int32_t idx){
-	TCL_Number *outNum = malloc(sizeof(TCL_Number));
-	*outNum = (TCL_Number){0};
+	TCL_Number *outNum = NULL;
 	if(idx == -1)
 		return outNum;
 	TCL_Slice *slc = &(exprList->expr[idx].str);
@@ -324,6 +331,7 @@ TCL_Number *exprTokenInterpret(TCLR_Context *ctx,TCLCORE_Expr *exprList,
 		};
 		outStr = tcl_get_from_scope_slice(&(ctx->scope),vslice);
 		//  */
+		// get from scope and throw away!
 		TCL_String *outStr = tcl_get_from_scope_slice(
 				&(ctx->scope),slc);
 
@@ -339,10 +347,17 @@ TCL_Number *exprTokenInterpret(TCLR_Context *ctx,TCLCORE_Expr *exprList,
 			.string = outStr
 		};
 		_exprParseString(slc,&(outStr->var),0);
-		outStr->gc.freeCallback = (void*)_exprFreeDefer;
+		tcl_set_garbage_arena(&(ctx->arena),(TCL_Disposable*)outStr->var);
+		outStr->var->gc.refs++;
+		//outStr->gc.freeCallback = (void*)tcl_free_string;
 		// ??? TODO ???
 		return outStr->var;
 	}
+	outNum = malloc(sizeof(TCL_Number));
+	*outNum = (TCL_Number){0};
+	outNum->typ |= NUMBERT_DO_FREE;
+	outNum->gc.freeCallback = (void*)exprFreeNumber;
+	//
 	TCL_Number *left  = exprTokenInterpret(ctx,
 			exprList,exprList->expr[idx].left );
 	TCL_Number *right = exprTokenInterpret(ctx,
@@ -350,7 +365,7 @@ TCL_Number *exprTokenInterpret(TCLR_Context *ctx,TCLCORE_Expr *exprList,
 
 	if((left->typ & NUMBERT_Mask) == NUMBERT_Gmpz &&
 			(right->typ & NUMBERT_Mask) == NUMBERT_Float){
-		left->typ = (left->typ & ~NUMBERT_Mask) | NUMBERT_Float;
+		left->typ |= (left->typ & ~NUMBERT_DO_FREE) | NUMBERT_Float;
 		float lft = (float)mpz_get_d(left->var.gmpz);
 		mpz_clear(left->var.gmpz); // wtf, how do I do this?
 		left->var.flt = lft;
@@ -359,7 +374,7 @@ TCL_Number *exprTokenInterpret(TCLR_Context *ctx,TCLCORE_Expr *exprList,
 	if((left->typ & NUMBERT_Mask) == NUMBERT_Float &&
 			(right->typ & NUMBERT_Mask) == NUMBERT_Gmpz){
 		//right->
-		right->typ = (right->typ & ~NUMBERT_Mask) | NUMBERT_Float;
+		right->typ |= (right->typ & ~NUMBERT_DO_FREE) | NUMBERT_Float;
 		float rft = (float)mpz_get_d(right->var.gmpz);
 		mpz_clear(right->var.gmpz);
 		right->var.flt = rft;
@@ -544,7 +559,7 @@ void exprResolveDefer(TCL_String **strptr){
 	if(vcap == -1){
 		return;
 	}
-	(*strptr)->gc.freeCallback = _exprFreeDefer;
+	(*strptr)->gc.freeCallback = (void*)tcl_free_string;
 	(*strptr)->replaceWith = NULL;
 	//(*strptr)->freeCallback = NULL;
 	(*strptr)->capacity = vcap - sz + 1;
@@ -553,7 +568,9 @@ void exprResolveDefer(TCL_String **strptr){
 	(*strptr)->gc.refs = 0;
 	(*strptr)->gc.tags = oldStr->gc.tags;
 	(*strptr)->var = oldStr->var;
+	//(*strptr)->var->gc.refs++; // TODO here
 	oldStr->replaceWith = (*strptr);
+	//(*strptr)->gc.refs++;
 	oldStr->var->typ = NUMBERT_None;
 	oldStr->gc.tags |= TCL_ST_Var_Accounted;
 }
@@ -566,9 +583,10 @@ TCL_String *exprGetString(TCL_Number *num){
 	strOut->capacity = 0;
 	strOut->gc.refs = 0;
 	strOut->deferCallback = (void*)exprResolveDefer;
-	strOut->gc.freeCallback = (void*)_exprFreeDefer;
+	strOut->gc.freeCallback = (void*)tcl_free_string;
 	strOut->replaceWith = NULL;
 	strOut->gc.tags = 0;//TLC_ST_Defer;
+	strOut->var->gc.refs++;
 	/*
 	if((num->typ & NUMBERT_Mask) == NUMBERT_Gmpz);
 	if((num->typ & NUMBERT_Mask) == NUMBERT_Gmpq);
@@ -628,9 +646,11 @@ TCL_String *exprFunction(TCLR_Context **ctx,TCLS_Cmd *cmd){
 			TCL_Number *num = exprTokenInterpret(*ctx,exprPtr,idx);
 			num->typ &= ~NUMBERT_DO_FREE;
 			outStr = exprGetString(num);
-			tcl_set_garbage_arena(
-					&((*ctx)->arena),
+			tcl_set_garbage_arena(&((*ctx)->arena),
 					(TCL_Disposable*)outStr);
+			tcl_set_garbage_arena(&((*ctx)->arena),
+					(TCL_Disposable*)outStr->var);
+			//outStr->var->gc.refs++;
 		}
 		//
 		int32_t argTag = cmd->arguments[0]->gc.tags & TCL_ST_Mask;

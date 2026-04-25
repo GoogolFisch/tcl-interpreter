@@ -54,7 +54,7 @@ struct TCL_String{
 	int32_t length;
 	struct TCL_Number *var;
 	void *deferCallback;
-	void *replaceWith;
+	struct TCL_String *replaceWith;
 	int32_t capacity;
 	uint8_t data[];
 };

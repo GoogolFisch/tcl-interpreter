@@ -51,7 +51,7 @@ void db_print_commands(TCLS_Commands *com){
 		}
 	}
 }
-void db_print_stringArena(TCL_GarbageArena *arena){
+void db_print_arena(TCL_GarbageArena *arena){
 	printf("Arena: %i/%i\n",arena->length,arena->capacity);
 	for(int32_t i = 0;i < arena->length;i++){
 		TCL_Disposable *place = arena->list[i];
@@ -60,6 +60,15 @@ void db_print_stringArena(TCL_GarbageArena *arena){
 		/*printf("String:%i/%i %i #%i -> %.*s\n",
 				str->length,str->capacity,str->gc.tags,str->refs,
 				str->length,str->data);*/
+	}
+}
+void db_raise_arena(TCL_GarbageArena *arena){
+	for(int32_t i = 0;i < arena->length;i++){
+		TCL_Disposable *place = arena->list[i];
+		if(place->refs & 0xffff){
+			free(place);
+		}
+		free(place);
 	}
 }
 

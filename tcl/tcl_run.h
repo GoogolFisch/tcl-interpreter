@@ -41,10 +41,14 @@ void tclr_free_context(TCLR_Context *ctx){
 	} //  */
 	if(ctx->parent == NULL){
 		if(ctx->globFlags & TCLRG_SHOW_GC){
-			db_print_stringArena(ctx->arena);
+			db_print_arena(ctx->arena);
 		}
 		tclf_free_function_scope(&(ctx->fnScope));
-		tcl_garbage_collect_arena(&(ctx->arena));
+		while(tcl_garbage_collect_arena(&(ctx->arena)));
+		if(ctx->globFlags & TCLRG_SHOW_GC){
+			// raise here for fun!
+			db_raise_arena(ctx->arena);
+		}
 		free(ctx->arena);
 		// TODO
 	}
@@ -84,7 +88,7 @@ TCL_String *tclr_get_var_slice(TCL_String *str,int32_t *index){
 	outStr->length = 0;
 	outStr->deferCallback = NULL;
 	outStr->replaceWith = NULL;
-	outStr->gc.freeCallback = NULL;
+	outStr->gc.freeCallback = (void*)tcl_free_string;
 	outStr->gc.refs = 0;
 	outStr->gc.tags = TCL_ST_None;
 
@@ -122,7 +126,7 @@ TCL_String *tclr_compile_str(TCLR_Context *ctx,int32_t *stack,TCL_String *base){
 	outStr->capacity = base->length;
 	outStr->deferCallback = NULL;
 	outStr->replaceWith = NULL;
-	outStr->gc.freeCallback = NULL;
+	outStr->gc.freeCallback = (void*)tcl_free_string;
 	outStr->gc.refs = 0;
 	outStr->gc.tags = 0;
 	char state = 0;
