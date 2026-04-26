@@ -18,6 +18,9 @@ void tcl_string_cp(TCL_String **into,TCL_String *from);
 TCL_String *tcl_create_string(int32_t length,char *data);
 TCL_String *tcl_create_cstring(char *data);
 
+// 0 for not matching, 1 for matching
+char tcl_slice_match_cstr(TCL_Slice *slc,char *cstr);
+
 // scope stuff
 void tcl_set_into_scope(TCL_Scope **stringScope,
 		TCL_String *key,TCL_String *value);
@@ -124,6 +127,16 @@ TCL_String *tcl_create_cstring(char *data){
 	int32_t length = 0;
 	while(data[length] != '\0')length++;
 	return tcl_create_string(length,data);
+}
+char tcl_slice_match_cstr(TCL_Slice *slc,char *cstr){
+	int32_t slI,csI;
+	slI = slc->offset;
+	csI = 0;
+	for(;csI < slc->length && cstr[csI] != 0;csI++,slI++){
+		if(cstr[csI] != slc->string->data[slI])
+			return 0;
+	}
+	return (cstr[csI] == 0 && csI == slc->length);
 }
 
 void tcl_set_into_scope(TCL_Scope **stringScope,

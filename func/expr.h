@@ -85,8 +85,7 @@ void exprTokenise(TCLCORE_Expr **exprList,TCL_String *str){
 			state = '.';
 			goto expr_token_append;
 		}
-		if(move == ' ' || move == '\t' ||
-				move == '\r' || move == '\n'){
+		if((uint8_t)move <= ' '){
 			state = 0;
 			continue;
 		}
@@ -177,11 +176,11 @@ int32_t exprTokenOverList(TCLCORE_Expr *exprList,
 		// never run vvvv
 		if(exprList->expr[idx].flags == EXPR_LISTF_USED)continue;
 		//
-		if(slc->string->data[slc->offset] == '('){
+		if(tcl_slice_match_cstr(slc,"(")){
 			if(stack == 0)stackBack = idx;
 			stack++;
 		}
-		if(slc->string->data[slc->offset] == ')'){
+		if(tcl_slice_match_cstr(slc,")")){
 			stack--;
 			if(stack == 0){
 				exprTokenOverList(exprList,
@@ -200,11 +199,11 @@ int32_t exprTokenOverList(TCLCORE_Expr *exprList,
 		if(slc->length != 1)continue;
 		if(exprList->expr[idx].flags == EXPR_LISTF_USED)continue;
 		//
-		if(slc->string->data[slc->offset] == '*')
+		if(tcl_slice_match_cstr(slc,"*"))
 			exprTokenOperationTree(exprList,idx,lower,upper,0);
-		if(slc->string->data[slc->offset] == '/')
+		if(tcl_slice_match_cstr(slc,"/"))
 			exprTokenOperationTree(exprList,idx,lower,upper,0);
-		if(slc->string->data[slc->offset] == '%')
+		if(tcl_slice_match_cstr(slc,"%"))
 			exprTokenOperationTree(exprList,idx,lower,upper,0);
 	}
 	/// combine + -
@@ -213,9 +212,9 @@ int32_t exprTokenOverList(TCLCORE_Expr *exprList,
 		if(slc->length != 1)continue;
 		if(exprList->expr[idx].flags == EXPR_LISTF_USED)continue;
 		//
-		if(slc->string->data[slc->offset] == '+')
+		if(tcl_slice_match_cstr(slc,"+"))
 			exprTokenOperationTree(exprList,idx,lower,upper,0);
-		if(slc->string->data[slc->offset] == '-')
+		if(tcl_slice_match_cstr(slc,"-"))
 			exprTokenOperationTree(exprList,idx,lower,upper,0);
 	}
 	/// combine == <= >= < >
@@ -224,22 +223,29 @@ int32_t exprTokenOverList(TCLCORE_Expr *exprList,
 		if(slc->length < 1 || slc->length > 2)continue;
 		if(exprList->expr[idx].flags == EXPR_LISTF_USED)continue;
 		//
-		if(slc->string->data[slc->offset] == '=')
+		//tcl_slice_match_cstr(slc,"=");
+		if(tcl_slice_match_cstr(slc,"=="))
 			exprTokenOperationTree(exprList,idx,lower,upper,0);
-		if(slc->string->data[slc->offset] == '<')
+		if(tcl_slice_match_cstr(slc,"<="))
 			exprTokenOperationTree(exprList,idx,lower,upper,0);
-		if(slc->string->data[slc->offset] == '>')
+		if(tcl_slice_match_cstr(slc,"<"))
+			exprTokenOperationTree(exprList,idx,lower,upper,0);
+		if(tcl_slice_match_cstr(slc,">="))
+			exprTokenOperationTree(exprList,idx,lower,upper,0);
+		if(tcl_slice_match_cstr(slc,">"))
+			exprTokenOperationTree(exprList,idx,lower,upper,0);
+		if(tcl_slice_match_cstr(slc,"!="))
 			exprTokenOperationTree(exprList,idx,lower,upper,0);
 	}
 	
 	return 0;
 }
-void _exprFreeDefer(TCL_String *str){
+void _exprParseFree(TCL_Number *num){
 	//str->var->typ |= NUMBERT_DO_FREE;
-	_exprNumberMayFree(str->var);
-	free(str->var);
-	str->var = NULL;
-	str->gc.freeCallback = NULL;
+	if(!(num->typ & NUMBERT_DO_FREE))
+		return;
+	_exprNumberMayFree(num);
+	free(num);
 }
 //flag == 0 => normal expr, flag == 1 => gmp
 int32_t _exprParseString(TCL_Slice slc,TCL_Number **numptr,int32_t flag){
@@ -382,7 +388,7 @@ TCL_Number *exprTokenInterpret(TCLR_Context *ctx,TCLCORE_Expr *exprList,
 	}
 	int32_t cmp;
 	//
-	if(slc->string->data[slc->offset] == '+'){
+	if(tcl_slice_match_cstr(slc,"+")){
 		if(left->typ & NUMBERT_Gmpz && right->typ & NUMBERT_Gmpz){
 			mpz_add(outNum->var.gmpz,
 					left->var.gmpz,
@@ -394,7 +400,7 @@ TCL_Number *exprTokenInterpret(TCLR_Context *ctx,TCLCORE_Expr *exprList,
 			outNum->typ = NUMBERT_Float;
 		}
 	}
-	else if(slc->string->data[slc->offset] == '-'){
+	else if(tcl_slice_match_cstr(slc,"-")){
 		if(left->typ & NUMBERT_Gmpz && right->typ & NUMBERT_Gmpz){
 			mpz_sub(outNum->var.gmpz,
 					left->var.gmpz,
@@ -406,7 +412,7 @@ TCL_Number *exprTokenInterpret(TCLR_Context *ctx,TCLCORE_Expr *exprList,
 			outNum->typ = NUMBERT_Float;
 		}
 	}
-	else if(slc->string->data[slc->offset] == '*'){
+	else if(tcl_slice_match_cstr(slc,"*")){
 		if(left->typ & NUMBERT_Gmpz && right->typ & NUMBERT_Gmpz){
 			mpz_mul(outNum->var.gmpz,
 					left->var.gmpz,
@@ -418,9 +424,9 @@ TCL_Number *exprTokenInterpret(TCLR_Context *ctx,TCLCORE_Expr *exprList,
 			outNum->typ = NUMBERT_Float;
 		}
 	}
-	else if(slc->string->data[slc->offset] == '/'){
+	else if(tcl_slice_match_cstr(slc,"/")){
 		if(left->typ & NUMBERT_Gmpz && right->typ & NUMBERT_Gmpz){
-			mpz_divexact(outNum->var.gmpz,
+			mpz_fdiv_q(outNum->var.gmpz,
 					left->var.gmpz,
 					right->var.gmpz);
 			outNum->typ = NUMBERT_Gmpz | NUMBERT_DO_FREE;
@@ -430,7 +436,7 @@ TCL_Number *exprTokenInterpret(TCLR_Context *ctx,TCLCORE_Expr *exprList,
 			outNum->typ = NUMBERT_Float;
 		}
 	}
-	else if(slc->string->data[slc->offset] == '%'){
+	else if(tcl_slice_match_cstr(slc,"%")){
 		if(left->typ & NUMBERT_Gmpz && right->typ & NUMBERT_Gmpz){
 			mpz_mod(outNum->var.gmpz,left->var.gmpz,right->var.gmpz);
 			outNum->typ = NUMBERT_Gmpz | NUMBERT_DO_FREE;
@@ -441,7 +447,7 @@ TCL_Number *exprTokenInterpret(TCLR_Context *ctx,TCLCORE_Expr *exprList,
 		}
 	}
 	// cmp checking
-	else if(slc->string->data[slc->offset] == '<'){
+	else if(tcl_slice_match_cstr(slc,"<")){
 		if(left->typ & NUMBERT_Gmpz && right->typ & NUMBERT_Gmpz){
 			cmp = mpz_cmp(left->var.gmpz,right->var.gmpz);
 			mpz_set_ui(outNum->var.gmpz,cmp < 0);
@@ -452,7 +458,7 @@ TCL_Number *exprTokenInterpret(TCLR_Context *ctx,TCLCORE_Expr *exprList,
 		}
 		outNum->typ = NUMBERT_Gmpz | NUMBERT_DO_FREE;
 	}
-	else if(slc->string->data[slc->offset] == '>'){
+	else if(tcl_slice_match_cstr(slc,">")){
 		if(left->typ & NUMBERT_Gmpz && right->typ & NUMBERT_Gmpz){
 			cmp = mpz_cmp(left->var.gmpz,right->var.gmpz);
 			mpz_set_ui(outNum->var.gmpz,cmp > 0);
@@ -463,10 +469,7 @@ TCL_Number *exprTokenInterpret(TCLR_Context *ctx,TCLCORE_Expr *exprList,
 		}
 		outNum->typ = NUMBERT_Gmpz | NUMBERT_DO_FREE;
 	}
-	if(slc->length < 2)
-		goto _Expr_Parse_Exit;
-	if(slc->string->data[slc->offset] == '=' && 
-	slc->string->data[slc->offset + 1] == '='){
+	else if(tcl_slice_match_cstr(slc,"==")){
 		// ==
 		if(left->typ & NUMBERT_Gmpz && right->typ & NUMBERT_Gmpz){
 			cmp = mpz_cmp(left->var.gmpz,right->var.gmpz);
@@ -478,8 +481,7 @@ TCL_Number *exprTokenInterpret(TCLR_Context *ctx,TCLCORE_Expr *exprList,
 		}
 		outNum->typ = NUMBERT_Gmpz | NUMBERT_DO_FREE;
 	}
-	else if(slc->string->data[slc->offset] == '<' && 
-	slc->string->data[slc->offset + 1] == '='){
+	else if(tcl_slice_match_cstr(slc,"<=")){
 		// <=
 		if(left->typ & NUMBERT_Gmpz && right->typ & NUMBERT_Gmpz){
 			int32_t cmp = mpz_cmp(left->var.gmpz,right->var.gmpz);
@@ -491,8 +493,7 @@ TCL_Number *exprTokenInterpret(TCLR_Context *ctx,TCLCORE_Expr *exprList,
 		}
 		outNum->typ = NUMBERT_Gmpz | NUMBERT_DO_FREE;
 	}
-	else if(slc->string->data[slc->offset] == '>' && 
-	slc->string->data[slc->offset + 1] == '='){
+	else if(tcl_slice_match_cstr(slc,">=")){
 		// >=
 		if(left->typ & NUMBERT_Gmpz && right->typ & NUMBERT_Gmpz){
 			cmp = mpz_cmp(left->var.gmpz,right->var.gmpz);
@@ -504,8 +505,7 @@ TCL_Number *exprTokenInterpret(TCLR_Context *ctx,TCLCORE_Expr *exprList,
 		}
 		outNum->typ = NUMBERT_Gmpz | NUMBERT_DO_FREE;
 	}
-	else if(slc->string->data[slc->offset] == '!' && 
-	slc->string->data[slc->offset + 1] == '='){
+	else if(tcl_slice_match_cstr(slc,"!=")){
 		// !=
 		if(left->typ & NUMBERT_Gmpz && right->typ & NUMBERT_Gmpz){
 			cmp = mpz_cmp(left->var.gmpz,right->var.gmpz);
@@ -517,11 +517,10 @@ TCL_Number *exprTokenInterpret(TCLR_Context *ctx,TCLCORE_Expr *exprList,
 		}
 		outNum->typ = NUMBERT_Gmpz | NUMBERT_DO_FREE;
 	}
-_Expr_Parse_Exit:
 
 	//
-	_exprNumberMayFree(left);
-	_exprNumberMayFree(right);
+	_exprParseFree(left);
+	_exprParseFree(right);
 
 	return outNum;
 }

@@ -168,6 +168,10 @@ int32_t main(int32_t argc,char **argv,char **env){
 		fileName = argv[0];
 	}
 	fptr = fopen(fileName,"r");
+	if(fptr == NULL){
+		printf("Error!, File %s not Found!\n",fileName);
+		return 1;
+	}
 	fseek(fptr,0,SEEK_END);
 	int32_t length = ftell(fptr);
 	fseek(fptr,0,SEEK_SET);
