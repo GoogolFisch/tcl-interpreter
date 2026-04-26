@@ -411,7 +411,7 @@ static TCL_String *_tcls_cmd_get_string(TCLS_Commands **cmd,TCL_String *str,
 	}
 	//
 	outStr = malloc(sizeof(TCL_String) + sizeof(char) * (ending - start));
-	outStr->var->typ = 0;
+	outStr->var = NULL;
 	outStr->gc.freeCallback = (void*)tcl_free_string;
 	outStr->deferCallback = NULL;
 	outStr->replaceWith = NULL;

@@ -40,7 +40,7 @@ void _exprNumberMayFree(TCL_Number *num){
 }
 void exprFreeNumber(void *place){
 	TCL_Number *num = place;
-	num->typ &= ~NUMBERT_DO_FREE;
+	num->typ |= NUMBERT_DO_FREE;
 	_exprNumberMayFree(num);
 }
 void exprTokenise(TCLCORE_Expr **exprList,TCL_String *str){
@@ -347,7 +347,8 @@ TCL_Number *exprTokenInterpret(TCLR_Context *ctx,TCLCORE_Expr *exprList,
 			.string = outStr
 		};
 		_exprParseString(slc,&(outStr->var),0);
-		tcl_set_garbage_arena(&(ctx->arena),(TCL_Disposable*)outStr->var);
+		tcl_set_garbage_arena(&(ctx->arena),
+				(TCL_Disposable*)(outStr->var));
 		outStr->var->gc.refs++;
 		//outStr->gc.freeCallback = (void*)tcl_free_string;
 		// ??? TODO ???
@@ -571,7 +572,7 @@ void exprResolveDefer(TCL_String **strptr){
 	//(*strptr)->var->gc.refs++; // TODO here
 	oldStr->replaceWith = (*strptr);
 	//(*strptr)->gc.refs++;
-	oldStr->var->typ = NUMBERT_None;
+	//oldStr->var->typ = NUMBERT_None;
 	oldStr->gc.tags |= TCL_ST_Var_Accounted;
 }
 
