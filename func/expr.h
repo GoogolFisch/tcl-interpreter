@@ -526,6 +526,7 @@ TCL_Number *exprTokenInterpret(TCLR_Context *ctx,TCLCORE_Expr *exprList,
 }
 void exprResolveDefer(TCL_String **strptr){
 	TCL_String *oldStr = *strptr;
+	*strptr = NULL;
 	//int32_t refs = (*strptr)->refs;
 	//tags &= ~TCL_ST_Defer;
 	struct TCL_Number var = *(oldStr->var);
@@ -561,18 +562,15 @@ void exprResolveDefer(TCL_String **strptr){
 	}
 	(*strptr)->gc.freeCallback = (void*)tcl_free_string;
 	(*strptr)->replaceWith = NULL;
-	//(*strptr)->freeCallback = NULL;
 	(*strptr)->capacity = vcap - sz + 1;
 	(*strptr)->length = vcap - sz;
-	//(*strptr)->refs = refs & ~0xffffff;
-	(*strptr)->gc.refs = 0;
+	//
 	(*strptr)->gc.tags = oldStr->gc.tags;
 	(*strptr)->var = oldStr->var;
-	//(*strptr)->var->gc.refs++; // TODO here
+	(*strptr)->var->gc.refs++; // TODO here
+	//
 	oldStr->replaceWith = (*strptr);
-	//(*strptr)->gc.refs++;
-	//oldStr->var->typ = NUMBERT_None;
-	oldStr->gc.tags |= TCL_ST_Var_Accounted;
+	(*strptr)->gc.refs = 1;
 }
 
 TCL_String *exprGetString(TCL_Number *num){

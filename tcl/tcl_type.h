@@ -295,8 +295,7 @@ char tcl_garbage_collect_arena(TCL_GarbageArena **gcArena){
 		if(refs)continue;
 		if(place->freeCallback == NULL)
 			free(place);
-		if(place->freeCallback != NULL &&
-				!(place->tags & TCL_ST_Var_Accounted))
+		if(place->freeCallback != NULL)
 			((TCL_GC_Collection)(place->freeCallback))(place);
 		arena->list[idx] = arena->list[arena->length - 1];
 		arena->length--;
@@ -317,6 +316,9 @@ void _tcl_move_string_arena(TCL_GarbageArena **gcArena,
 	// TODO should error here?
 	tcl_set_garbage_arena(gcArena,nstr);
 }
+/*char tcl_garbage_has(TCL_Disposable *place){
+	return place->refs & TCL_STRING_REFS_FLAG(place->refs);
+}*/
 #undef TCL_STRING_REFS_FLAG
 
 

@@ -46,7 +46,7 @@ enum TCL_String_Tags{
 	TCL_ST_Object,
 
 	TCL_ST_Mask = 127,
-	TCL_ST_Var_Accounted = 128,
+	//TCL_ST_Var_Accounted = 128,
 };
 // should be immutable when refs > 1?
 struct TCL_String{

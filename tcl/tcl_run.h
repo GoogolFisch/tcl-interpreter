@@ -141,23 +141,24 @@ TCL_String *tclr_compile_str(TCLR_Context *ctx,int32_t *stack,TCL_String *base){
 			strIdx++;
 			if(stStr == NULL)
 				continue;
+			stStr->gc.refs--;
 			if(base->length == 2){
 				// early exit for set
 				free(outStr);
-				return ctx->parseStack[(*stack) - 1];
+				return stStr;
+				//return ctx->parseStack[(*stack) - 1];
 			}
 			if(stStr->deferCallback != NULL){
 				//TCL_String *old = fetch;
 				//old->gc.refs--;
-				stStr->gc.refs--;
 				((TCL_DEFER_CBack)(stStr->deferCallback))(&stStr);
 				tcl_set_garbage_arena(
 						&(ctx->arena),
 						(TCL_Disposable*)stStr);
-				stStr->gc.refs++;
+				//stStr->gc.refs++;
 			}
 			tcl_string_cp(&outStr,stStr);
-			stStr->gc.refs--;
+			//stStr->gc.refs--;
 			continue;
 		}
 		if(base->data[strIdx] == '$' && state == 0){
@@ -180,7 +181,7 @@ TCL_String *tclr_compile_str(TCLR_Context *ctx,int32_t *stack,TCL_String *base){
 			if(fetch->deferCallback != NULL){
 				//TCL_String *old = fetch;
 				//old->gc.refs--;
-				fetch->gc.refs--;
+				//fetch->gc.refs--;
 				((TCL_DEFER_CBack)(fetch->deferCallback))(&fetch);
 				tcl_set_garbage_arena(
 						&(ctx->arena),
